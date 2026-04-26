@@ -1,0 +1,22 @@
+# Maven
+target/
+
+# Eclipse / STS
+.classpath
+.project
+.settings/
+.factorypath
+
+# Compilados
+*.class
+
+# Logs
+*.log
+
+# Carpetas locales (MUY IMPORTANTE en tu caso)
+pdfs-firmados/
+sisconv-uploads/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
