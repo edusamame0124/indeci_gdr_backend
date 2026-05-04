@@ -15,7 +15,9 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
@@ -46,6 +48,7 @@ import pe.gob.gdr.access.domain.model.DocSignatureRequest;
 import pe.gob.gdr.access.domain.model.DocTemplate;
 import pe.gob.gdr.access.domain.model.DocType;
 import pe.gob.gdr.access.domain.model.DocVersion;
+import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
 import pe.gob.gdr.access.domain.model.GdrResult;
 import pe.gob.gdr.access.domain.repository.DocFlowStatusRepository;
 import pe.gob.gdr.access.domain.repository.DocHashRepository;
@@ -54,6 +57,7 @@ import pe.gob.gdr.access.domain.repository.DocSignatureRequestRepository;
 import pe.gob.gdr.access.domain.repository.DocTemplateRepository;
 import pe.gob.gdr.access.domain.repository.DocTypeRepository;
 import pe.gob.gdr.access.domain.repository.DocVersionRepository;
+import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.GdrResultRepository;
 import pe.gob.gdr.access.infrastructure.config.DocumentStorageProperties;
 
@@ -96,11 +100,13 @@ public class DocumentManagementService {
     private final DocHashRepository docHashRepository;
     private final DocFlowStatusRepository docFlowStatusRepository;
     private final DocSignatureRequestRepository docSignatureRequestRepository;
+    private final GdrEvaluationAssignmentRepository assignmentRepository;
     private final GdrResultRepository resultRepository;
     private final DigitalSignaturePort digitalSignaturePort;
     private final DocumentStoragePort documentStoragePort;
     private final DocumentStorageProperties storageProperties;
     private final NotificacionesService notificacionesService;
+    private final FormatoGdrPdfExporter formatoGdrPdfExporter;
 
     public DocumentManagementService(
             DocTypeRepository docTypeRepository,
@@ -110,11 +116,13 @@ public class DocumentManagementService {
             DocHashRepository docHashRepository,
             DocFlowStatusRepository docFlowStatusRepository,
             DocSignatureRequestRepository docSignatureRequestRepository,
+            GdrEvaluationAssignmentRepository assignmentRepository,
             GdrResultRepository resultRepository,
             DigitalSignaturePort digitalSignaturePort,
             DocumentStoragePort documentStoragePort,
             DocumentStorageProperties storageProperties,
-            NotificacionesService notificacionesService
+            NotificacionesService notificacionesService,
+            FormatoGdrPdfExporter formatoGdrPdfExporter
     ) {
         this.docTypeRepository = docTypeRepository;
         this.docTemplateRepository = docTemplateRepository;
@@ -123,11 +131,13 @@ public class DocumentManagementService {
         this.docHashRepository = docHashRepository;
         this.docFlowStatusRepository = docFlowStatusRepository;
         this.docSignatureRequestRepository = docSignatureRequestRepository;
+        this.assignmentRepository = assignmentRepository;
         this.resultRepository = resultRepository;
         this.digitalSignaturePort = digitalSignaturePort;
         this.documentStoragePort = documentStoragePort;
         this.storageProperties = storageProperties;
         this.notificacionesService = notificacionesService;
+        this.formatoGdrPdfExporter = formatoGdrPdfExporter;
     }
 
     public List<TipoDocumentoResponse> listDocumentTypes() {
@@ -173,6 +183,20 @@ public class DocumentManagementService {
         DocSignatureRequest request = findSignatureRequest(requestId);
         Resource resource = documentStoragePort.loadAsResource(request.getPreparedFileKey());
         return buildFileResponse(resource, request.getPreparedMimeType(), request.getPreparedOriginalName(), download);
+    }
+
+    public ResponseEntity<Resource> downloadFormatoGdrPdf(Long evaluatedId) {
+        GdrEvaluationAssignment assignment = resolveActiveAssignmentForFormatoGdr(evaluatedId);
+        Optional<GdrResult> consolidated = resultRepository.findByEvaluatedPersonIdInActiveCycle(evaluatedId);
+        FormatoGdrPdfExportContext ctx = new FormatoGdrPdfExportContext(assignment, consolidated);
+        byte[] bytes = formatoGdrPdfExporter.exportPdf(ctx);
+        String filename = sanitizeOriginalName(buildFormatoGdrPdfFileName(evaluatedId));
+        Resource resource = new ByteArrayResource(bytes);
+        return buildFileResponse(resource, MediaType.APPLICATION_PDF_VALUE, filename, true);
+    }
+
+    private String buildFormatoGdrPdfFileName(Long evaluatedId) {
+        return "formato_gdr_evaluado_" + evaluatedId + ".pdf";
     }
 
     @Transactional
@@ -633,6 +657,17 @@ public class DocumentManagementService {
             throw new DomainException("La clave interna de la plantilla no es valida.");
         }
         return resolvedPath;
+    }
+
+    private GdrEvaluationAssignment resolveActiveAssignmentForFormatoGdr(Long evaluatedId) {
+        List<GdrEvaluationAssignment> assignments =
+                assignmentRepository.findActiveByEvaluatedIdInActiveCycle(evaluatedId);
+        if (assignments.isEmpty()) {
+            throw new ResourceNotFoundException(
+                    "No se encontro una asignacion activa del evaluado en el ciclo vigente."
+            );
+        }
+        return assignments.get(0);
     }
 
     private GdrResult findResultByEvaluatedId(Long evaluatedId) {

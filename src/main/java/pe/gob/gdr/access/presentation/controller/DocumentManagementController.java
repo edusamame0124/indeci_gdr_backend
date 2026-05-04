@@ -73,6 +73,12 @@ public class DocumentManagementController {
         ));
     }
 
+    @GetMapping("/formato-gdr/pdf")
+    @PreAuthorize("@gdrAccessPolicyService.canPrepareDocumentsForEvaluated(authentication, #evaluatedId)")
+    public ResponseEntity<?> downloadFormatoGdrPdf(@RequestParam("evaluatedId") Long evaluatedId) {
+        return documentManagementService.downloadFormatoGdrPdf(evaluatedId);
+    }
+
     @PostMapping("/firmas/preparar")
     @PreAuthorize("@gdrAccessPolicyService.canPrepareDocumentsForEvaluated(authentication, #request.evaluatedId())")
     public ResponseEntity<ApiResponse<SolicitudFirmaDetalleResponse>> prepareDocumentForSignature(

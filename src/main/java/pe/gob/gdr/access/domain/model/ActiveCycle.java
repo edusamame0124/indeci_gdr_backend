@@ -44,6 +44,15 @@ public class ActiveCycle {
     @Column(name = "END_DATE")
     private LocalDate endDate;
 
+    @Column(name = "FINAL_EVAL_GRADE_START_DATE")
+    private LocalDate finalEvalGradeStartDate;
+
+    @Column(name = "FINAL_EVAL_GRADE_END_DATE")
+    private LocalDate finalEvalGradeEndDate;
+
+    @Column(name = "QUAL_NOTIFY_DEADLINE_DATE")
+    private LocalDate qualNotifyDeadlineDate;
+
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";

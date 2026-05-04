@@ -27,6 +27,14 @@ public final class GoalScoringPolicy {
                 : QualitativeRating.SUJETO_OBSERVACION;
     }
 
+    /**
+     * Goal score used by Lot 3 / SERVIR-style weighting (see {@code GoalScoringPolicyTest} Table 7 cases).
+     * <p>
+     * Algebraically equals {@code (achievedValue / expectedValue) * 100 * (weight / 100)} when {@code weight}
+     * is stored as percentage points (for example {@code 35} for 35%).
+     * The implementation computes {@code achievedValue.multiply(weight).divide(expectedValue)} with rounding on
+     * that single division—pedagogical spreadsheets may truncate the intermediate ratio differently.
+     */
     public static BigDecimal calculateGoalScore(
             BigDecimal expectedValue,
             BigDecimal achievedValue,

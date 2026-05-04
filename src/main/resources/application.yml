@@ -41,10 +41,26 @@ spring:
       max-file-size: ${GDR_MAX_FILE_SIZE:10MB}
       max-request-size: ${GDR_MAX_FILE_SIZE:10MB}
 
+  mail:
+    host: ${SPRING_MAIL_HOST:localhost}
+    port: ${SPRING_MAIL_PORT:1025}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:false}
+
 # ============================
 # APP CONFIG
 # ============================
 app:
+  mail:
+    default-from: ${GDR_MAIL_FROM:}
+
   db:
     default-schema: ${GDR_SCHEMA}
 
@@ -69,6 +85,18 @@ app:
       integracion-oficial-habilitada: ${GDR_FIRMA_ENABLED:false}
       consulta-estado-habilitada: ${GDR_FIRMA_CONSULTA:false}
       retorno-automatico-habilitado: ${GDR_FIRMA_RETORNO:false}
+
+  # Formato GDR PDF generado (OpenPDF); ver docs/formato_gdr/README.md y specs/SDD_GDR_ACCESS.md §11.4.1
+  formato-gdr-pdf:
+    entity-name: "${GDR_FORMATO_GDR_ENTITY:Agencia de compras de las Fuerzas Armadas}"
+    entity-tagline: "${GDR_FORMATO_GDR_TAGLINE:Comprando para la Seguridad y Defensa Nacional}"
+    header-logo-path: "${GDR_FORMATO_GDR_HEADER_LOGO:classpath:assets/formato_gdr/logo_institucional.png}"
+    form-version: ${GDR_FORMATO_GDR_VERSION:v01}
+    form-revision: "${GDR_FORMATO_GDR_REVISION:Rev: nov-2025}"
+    servir-footer-note: "${GDR_FORMATO_GDR_SERVIR_FOOTER:AUTORIDAD NACIONAL DEL SERVICIO CIVIL - SERVIR}"
+    draft-banner-note: "${GDR_FORMATO_GDR_DRAFT_BANNER:BORRADOR: Datos según avance al momento. Cierre de evaluación pendiente; no sustituye acta consolidada.}"
+    segment-display-aliases:
+      GENERAL: EJECUTOR
 
 management:
   endpoints:

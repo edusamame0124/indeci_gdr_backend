@@ -15,7 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 import pe.gob.gdr.access.application.dto.request.GuardarEvaluacionFinalRequest;
 import pe.gob.gdr.access.application.dto.response.ApiResponse;
 import pe.gob.gdr.access.application.dto.response.DetalleEvaluacionFinalResponse;
+import pe.gob.gdr.access.application.dto.response.NotificarCalificacionMailResponse;
 import pe.gob.gdr.access.application.dto.response.ResumenEvaluacionFinalResponse;
+import pe.gob.gdr.access.application.service.GdrFinalEvaluationQualificationNotifyService;
 import pe.gob.gdr.access.application.service.GdrFinalEvaluationService;
 
 @RestController
@@ -23,9 +25,14 @@ import pe.gob.gdr.access.application.service.GdrFinalEvaluationService;
 public class GdrFinalEvaluationController {
 
     private final GdrFinalEvaluationService finalEvaluationService;
+    private final GdrFinalEvaluationQualificationNotifyService qualificationNotifyService;
 
-    public GdrFinalEvaluationController(GdrFinalEvaluationService finalEvaluationService) {
+    public GdrFinalEvaluationController(
+            GdrFinalEvaluationService finalEvaluationService,
+            GdrFinalEvaluationQualificationNotifyService qualificationNotifyService
+    ) {
         this.finalEvaluationService = finalEvaluationService;
+        this.qualificationNotifyService = qualificationNotifyService;
     }
 
     @GetMapping
@@ -69,6 +76,18 @@ public class GdrFinalEvaluationController {
         return ResponseEntity.ok(ApiResponse.ok(
                 finalEvaluationService.updateFinalEvaluation(evaluationId, request),
                 "Evaluacion final actualizada correctamente."
+        ));
+    }
+
+    @PostMapping("/{evaluationId}/notificar")
+    @PreAuthorize("@gdrAccessPolicyService.canNotifyFinalEvaluationQualificationByEvaluator(authentication, #evaluationId)")
+    public ResponseEntity<ApiResponse<NotificarCalificacionMailResponse>> notifyQualificationByEmail(
+            @PathVariable Long evaluationId,
+            Principal principal
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                qualificationNotifyService.notifyByEvaluator(principal.getName(), evaluationId),
+                "Notificacion por correo enviada correctamente."
         ));
     }
 }

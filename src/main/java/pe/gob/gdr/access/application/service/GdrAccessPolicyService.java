@@ -13,7 +13,6 @@ import pe.gob.gdr.access.domain.model.DocSignatureRequest;
 import pe.gob.gdr.access.domain.model.DocSignedFile;
 import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
 import pe.gob.gdr.access.domain.model.GdrEvidence;
-import pe.gob.gdr.access.domain.model.GdrFinalEvaluation;
 import pe.gob.gdr.access.domain.model.GdrGoal;
 import pe.gob.gdr.access.domain.model.GdrImprovementOpportunity;
 import pe.gob.gdr.access.domain.model.HrPerson;
@@ -599,6 +598,20 @@ public class GdrAccessPolicyService {
                 .orElse(false);
     }
 
+    /** Solo evaluador/a titular de la asignación activa (no ORH ni otros roles institucionales). */
+    public boolean canNotifyFinalEvaluationQualificationByEvaluator(Authentication authentication, Long evaluationId) {
+        return resolveAccess(authentication)
+                .filter(access -> access.featureAccess().canManageFinalEvaluations())
+                .flatMap(access -> finalEvaluationRepository.findByIdInActiveCycle(evaluationId)
+                        .map(evaluation ->
+                                canNotifyQualificationAsAssignmentEvaluator(
+                                        access.user(),
+                                        access.context(),
+                                        evaluation.getAssignment()
+                                )))
+                .orElse(false);
+    }
+
     public boolean canViewResultByEvaluated(Authentication authentication, Long evaluatedId) {
         return resolveAccess(authentication)
                 .filter(access -> access.featureAccess().canViewResults())
@@ -953,6 +966,26 @@ public class GdrAccessPolicyService {
     ) {
         Long evaluatedId = assignment.getEvaluatedPerson().getId();
         return canManageEvaluatedFlow(user, context, evaluatedId);
+    }
+
+    private boolean canNotifyQualificationAsAssignmentEvaluator(
+            User user,
+            ActiveCycleContextResponse context,
+            GdrEvaluationAssignment assignment
+    ) {
+        if (!context.hrPersonLinked() || !context.cycleActive() || context.personId() == null) {
+            return false;
+        }
+        if (isAdminSistema(user) || isOrh(user) || isJuntaDirectivos(user) || isGdrConsulta(user)) {
+            return false;
+        }
+        if (!isGdrUsuario(user)) {
+            return false;
+        }
+        Long personId = context.personId();
+        return (ACTOR_EVALUADOR.equals(context.functionalActor())
+                || ACTOR_EVALUADOR_Y_EVALUADO.equals(context.functionalActor()))
+                && Objects.equals(assignment.getEvaluatorPerson().getId(), personId);
     }
 
     private record ResolvedAccess(
