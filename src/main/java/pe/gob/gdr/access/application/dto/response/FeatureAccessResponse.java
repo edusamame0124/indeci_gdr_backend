@@ -24,6 +24,11 @@ public record FeatureAccessResponse(
         boolean canFollowupImprovements,
         boolean canViewReports,
         boolean canViewNotifications,
-        boolean canViewConsents
+        boolean canViewConsents,
+        boolean canViewOrhReception,
+        boolean canManageUsers,
+        boolean canViewDistinguidoCandidates,
+        boolean canManageDistinguidoRequisites,
+        boolean canAssignDistinguido
 ) {
 }

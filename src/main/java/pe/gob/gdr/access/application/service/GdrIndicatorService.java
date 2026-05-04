@@ -1,6 +1,7 @@
 package pe.gob.gdr.access.application.service;
 
 import java.util.List;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.gob.gdr.access.application.dto.request.IndicatorUpsertRequest;
@@ -44,14 +45,17 @@ public class GdrIndicatorService {
 
     @Transactional
     public IndicatorResponse createIndicator(IndicatorUpsertRequest request) {
-        String normalizedCode = normalizeCode(request.code());
-        if (indicatorRepository.existsByCodeIgnoreCase(normalizedCode)) {
-            throw new DomainException("Ya existe un indicador con el codigo indicado.");
-        }
-
         GdrIndicator indicator = new GdrIndicator();
-        applyRequest(indicator, request, normalizedCode);
-        return mapResponse(indicatorRepository.save(indicator));
+        applyRequest(indicator, request);
+        indicator.setCode(buildPendingCode());
+        GdrIndicator persisted = indicatorRepository.save(indicator);
+
+        String generatedCode = formatIndicatorCode(persisted.getId());
+        if (indicatorRepository.existsByCodeIgnoreCaseAndIdNot(generatedCode, persisted.getId())) {
+            throw new DomainException("Ya existe un indicador con el codigo generado automaticamente.");
+        }
+        persisted.setCode(generatedCode);
+        return mapResponse(indicatorRepository.save(persisted));
     }
 
     @Transactional
@@ -59,16 +63,11 @@ public class GdrIndicatorService {
         GdrIndicator indicator = indicatorRepository.findActiveById(indicatorId)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontro el indicador solicitado."));
 
-        String normalizedCode = normalizeCode(request.code());
-        if (indicatorRepository.existsByCodeIgnoreCaseAndIdNot(normalizedCode, indicatorId)) {
-            throw new DomainException("Ya existe un indicador con el codigo indicado.");
-        }
-
-        applyRequest(indicator, request, normalizedCode);
+        applyRequest(indicator, request);
         return mapResponse(indicatorRepository.save(indicator));
     }
 
-    private void applyRequest(GdrIndicator indicator, IndicatorUpsertRequest request, String normalizedCode) {
+    private void applyRequest(GdrIndicator indicator, IndicatorUpsertRequest request) {
         GdrValueType valueType = valueTypeRepository.findActiveById(request.valueTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontro el tipo de valor indicado."));
         GdrFormula formula = formulaRepository.findActiveById(request.formulaId())
@@ -76,7 +75,6 @@ public class GdrIndicatorService {
         GdrSegment segment = segmentRepository.findActiveById(request.segmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontro el segmento indicado."));
 
-        indicator.setCode(normalizedCode);
         indicator.setName(request.name().trim());
         indicator.setDescription(normalizeOptionalText(request.description()));
         indicator.setValueType(valueType);
@@ -101,8 +99,16 @@ public class GdrIndicatorService {
         );
     }
 
-    private String normalizeCode(String code) {
-        return code.trim().toUpperCase();
+    private String buildPendingCode() {
+        String compactToken = Long.toString(Math.abs(System.nanoTime()), 36).toUpperCase(Locale.ROOT);
+        if (compactToken.length() > 12) {
+            compactToken = compactToken.substring(compactToken.length() - 12);
+        }
+        return "TMP" + compactToken;
+    }
+
+    private String formatIndicatorCode(Long id) {
+        return String.format("IND-%03d", id);
     }
 
     private String normalizeOptionalText(String value) {

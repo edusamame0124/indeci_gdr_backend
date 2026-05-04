@@ -14,6 +14,8 @@ public interface JpaGdrSegmentRepository extends JpaRepository<GdrSegment, Long>
 
     Optional<GdrSegment> findByIdAndStatus(Long id, String status);
 
+    Optional<GdrSegment> findByCodeAndStatus(String code, String status);
+
     @Override
     default List<GdrSegment> findActive() {
         return findByStatusOrderByNameAsc("ACTIVE");
@@ -22,5 +24,10 @@ public interface JpaGdrSegmentRepository extends JpaRepository<GdrSegment, Long>
     @Override
     default Optional<GdrSegment> findActiveById(Long id) {
         return findByIdAndStatus(id, "ACTIVE");
+    }
+
+    @Override
+    default Optional<GdrSegment> findActiveByCode(String code) {
+        return findByCodeAndStatus(code, "ACTIVE");
     }
 }

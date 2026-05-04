@@ -46,6 +46,9 @@ public class GdrFinalEvaluation {
     @Column(name = "EVALUATION_COMMENT", length = 1000)
     private String evaluationComment;
 
+    @Column(name = "QUALITATIVE_RATING_CODE", length = 40)
+    private String qualitativeRatingCode;
+
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";

@@ -11,6 +11,10 @@ public record DetalleEvaluacionFinalResponse(
         String evaluatorName,
         String cycleName,
         BigDecimal consolidatedScore,
+        String qualitativeRatingCode,
+        String qualitativeRatingLabel,
+        String segmentCode,
+        String segmentName,
         String status,
         String evaluationComment,
         List<DetallePuntajeResponse> details

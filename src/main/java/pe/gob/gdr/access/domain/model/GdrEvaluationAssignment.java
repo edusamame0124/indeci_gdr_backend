@@ -50,6 +50,10 @@ public class GdrEvaluationAssignment {
     @JoinColumn(name = "ID_EVALUATED_PERSON", nullable = false)
     private HrPerson evaluatedPerson;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "ID_SEGMENT", nullable = false)
+    private GdrSegment segment;
+
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";

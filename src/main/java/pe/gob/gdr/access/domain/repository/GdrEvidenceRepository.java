@@ -14,5 +14,7 @@ public interface GdrEvidenceRepository {
 
     List<GdrEvidence> findActiveByGoalAssignmentIdInActiveCycle(Long assignmentId);
 
+    long countActiveByGoalIdInActiveCycle(Long goalId);
+
     GdrEvidence save(GdrEvidence evidence);
 }

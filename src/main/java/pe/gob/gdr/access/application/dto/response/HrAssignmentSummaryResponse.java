@@ -12,6 +12,9 @@ public record HrAssignmentSummaryResponse(
         Long orgUnitId,
         String orgUnitCode,
         String orgUnitName,
+        Long segmentId,
+        String segmentCode,
+        String segmentName,
         String status
 ) {
 }

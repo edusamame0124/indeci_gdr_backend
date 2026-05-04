@@ -5,8 +5,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 public record IndicatorUpsertRequest(
-        @NotBlank(message = "El codigo del indicador es obligatorio.")
-        String code,
         @NotBlank(message = "El nombre del indicador es obligatorio.")
         String name,
         String description,

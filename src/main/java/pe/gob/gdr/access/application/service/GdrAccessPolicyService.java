@@ -34,6 +34,7 @@ import pe.gob.gdr.access.domain.repository.UserRepository;
 public class GdrAccessPolicyService {
 
     public static final String ACTOR_ORH = "ORH";
+    public static final String ACTOR_JUNTA_DIRECTIVOS = "JUNTA_DIRECTIVOS";
     public static final String ACTOR_EVALUADOR = "EVALUADOR";
     public static final String ACTOR_EVALUADO = "EVALUADO";
     public static final String ACTOR_EVALUADOR_Y_EVALUADO = "EVALUADOR_Y_EVALUADO";
@@ -127,13 +128,29 @@ public class GdrAccessPolicyService {
         boolean ownAssignments = evaluatorScope || evaluatedScope;
         boolean hrLinkedOrh = isOrh(user) && context.hrPersonLinked();
         boolean hrLinkedGdrUser = isGdrUsuario(user) && context.hrPersonLinked();
+        boolean orhReception = isOrh(user)
+                && context.hrPersonLinked()
+                && context.cycleActive()
+                && ACTOR_ORH.equals(context.functionalActor());
+        boolean userManagement = hasAnyTechnicalRole(user, Set.of("ADMIN_SISTEMA"));
+        boolean orhDistinguido = isOrh(user)
+                && context.hrPersonLinked()
+                && context.cycleActive()
+                && ACTOR_ORH.equals(context.functionalActor());
+        boolean juntaDistinguido = isJuntaDirectivos(user)
+                && context.hrPersonLinked()
+                && context.cycleActive()
+                && ACTOR_JUNTA_DIRECTIVOS.equals(context.functionalActor());
+        boolean viewDistinguidoCandidates = admin || orhDistinguido || juntaDistinguido;
+        boolean manageDistinguidoRequisites = admin || orhDistinguido;
+        boolean assignDistinguido = admin || juntaDistinguido;
 
         return new FeatureAccessResponse(
                 true,
                 admin || institutionalGdr || ownAssignments,
-                admin || institutionalGdr,
                 admin || institutionalGdr || ownAssignments,
-                admin || institutionalGdr,
+                admin || institutionalGdr || ownAssignments,
+                admin || institutionalGdr || ownAssignments,
                 admin || institutionalGdr || ownAssignments,
                 admin || institutionalGdr || evaluatorScope,
                 admin || institutionalGdr || ownAssignments,
@@ -152,7 +169,12 @@ public class GdrAccessPolicyService {
                 admin || institutionalGdr || evaluatorScope,
                 admin || institutionalGdr,
                 admin || hrLinkedOrh || hrLinkedGdrUser,
-                admin || hrLinkedOrh || hrLinkedGdrUser
+                admin || hrLinkedOrh || hrLinkedGdrUser,
+                orhReception,
+                userManagement,
+                viewDistinguidoCandidates,
+                manageDistinguidoRequisites,
+                assignDistinguido
         );
     }
 
@@ -246,6 +268,95 @@ public class GdrAccessPolicyService {
 
     public boolean canViewConsents(Authentication authentication) {
         return resolveFeatureAccess(authentication).canViewConsents();
+    }
+
+    public boolean canViewOrhReception(Authentication authentication) {
+        return resolveAccess(authentication)
+                .map(access -> canViewOrhReception(access.user(), access.context()))
+                .orElse(false);
+    }
+
+    public boolean canManageUsers(Authentication authentication) {
+        return resolveAccess(authentication)
+                .map(access -> hasAnyTechnicalRole(access.user(), Set.of("ADMIN_SISTEMA")))
+                .orElse(false);
+    }
+
+    public boolean canViewDistinguidoCandidates(Authentication authentication) {
+        return resolveFeatureAccess(authentication).canViewDistinguidoCandidates();
+    }
+
+    public boolean canManageDistinguidoRequisites(Authentication authentication, Long assignmentId) {
+        return resolveAccess(authentication)
+                .map(access -> canManageDistinguidoRequisitesResource(access.user(), access.context(), assignmentId))
+                .orElse(false);
+    }
+
+    public boolean canAssignDistinguido(Authentication authentication) {
+        return resolveFeatureAccess(authentication).canAssignDistinguido();
+    }
+
+    private boolean canManageDistinguidoRequisitesResource(
+            User user,
+            ActiveCycleContextResponse context,
+            Long assignmentId
+    ) {
+        if (assignmentId == null) {
+            return false;
+        }
+        if (isAdminSistema(user)) {
+            return true;
+        }
+        if (!isOrh(user)
+                || !context.hrPersonLinked()
+                || !context.cycleActive()
+                || !ACTOR_ORH.equals(context.functionalActor())) {
+            return false;
+        }
+        return assignmentRepository.findActiveByIdInActiveCycle(assignmentId).isPresent();
+    }
+
+    public boolean canSetAssignmentSegment(Authentication authentication, Long assignmentId) {
+        return resolveAccess(authentication)
+                .flatMap(access -> assignmentRepository.findActiveByIdInActiveCycle(assignmentId)
+                        .map(assignment -> canSetAssignmentSegmentResource(access.user(), access.context(), assignment)))
+                .orElse(false);
+    }
+
+    private boolean canSetAssignmentSegmentResource(
+            User user,
+            ActiveCycleContextResponse context,
+            GdrEvaluationAssignment assignment
+    ) {
+        if (user == null || assignment == null) {
+            return false;
+        }
+        if (isAdminSistema(user) || isOrh(user)) {
+            return true;
+        }
+        if (context == null
+                || !context.hrPersonLinked()
+                || !context.cycleActive()
+                || context.personId() == null) {
+            return false;
+        }
+        if (!isGdrUsuario(user)) {
+            return false;
+        }
+        boolean isEvaluator = ACTOR_EVALUADOR.equals(context.functionalActor())
+                || ACTOR_EVALUADOR_Y_EVALUADO.equals(context.functionalActor());
+        return isEvaluator
+                && Objects.equals(assignment.getEvaluatorPerson().getId(), context.personId());
+    }
+
+    public boolean canViewOrhReception(User user, ActiveCycleContextResponse context) {
+        if (user == null || context == null) {
+            return false;
+        }
+        return isOrh(user)
+                && context.hrPersonLinked()
+                && context.cycleActive()
+                && ACTOR_ORH.equals(context.functionalActor());
     }
 
     public boolean canAccessDocumentsForEvaluated(Authentication authentication, Long evaluatedId) {
@@ -353,6 +464,82 @@ public class GdrAccessPolicyService {
                 .orElse(false);
     }
 
+    public boolean canRateGoalAchievement(Authentication authentication, Long goalId) {
+        return resolveAccess(authentication)
+                .filter(access -> access.featureAccess().canReviewEvidences())
+                .flatMap(access -> goalRepository.findActiveByIdInActiveCycle(goalId)
+                        .map(goal -> canReviewGoalAchievementResource(access.user(), access.context(), goal)))
+                .orElse(false);
+    }
+
+    public boolean canRateGoalAchievement(User user, GdrGoal goal) {
+        if (user == null || goal == null) {
+            return false;
+        }
+        ActiveCycleContextResponse context = resolveContext(user);
+        if (!buildFeatureAccess(user, context).canReviewEvidences()) {
+            return false;
+        }
+        return canReviewGoalAchievementResource(user, context, goal);
+    }
+
+    public boolean canCreateGoalChangeRequest(Authentication authentication, Long goalId) {
+        return resolveAccess(authentication)
+                .filter(access -> access.featureAccess().canViewGoals())
+                .flatMap(access -> goalRepository.findActiveByIdInActiveCycle(goalId)
+                        .map(goal -> canCreateGoalChangeRequest(access.user(), access.context(), goal)))
+                .orElse(false);
+    }
+
+    public boolean canCreateGoalChangeRequest(User user, ActiveCycleContextResponse context, GdrGoal goal) {
+        if (user == null || context == null || goal == null) {
+            return false;
+        }
+        if (!buildFeatureAccess(user, context).canViewGoals()) {
+            return false;
+        }
+        if (!context.hrPersonLinked() || !context.cycleActive() || context.personId() == null) {
+            return false;
+        }
+        if (!isGdrUsuario(user)) {
+            return false;
+        }
+        if (!ACTOR_EVALUADOR.equals(context.functionalActor())
+                && !ACTOR_EVALUADO.equals(context.functionalActor())
+                && !ACTOR_EVALUADOR_Y_EVALUADO.equals(context.functionalActor())) {
+            return false;
+        }
+        return canAccessGoalResource(user, context, goal);
+    }
+
+    public boolean canSubmitGoalToOrh(Authentication authentication, Long goalId) {
+        return resolveAccess(authentication)
+                .filter(access -> access.featureAccess().canViewGoals())
+                .flatMap(access -> goalRepository.findActiveByIdInActiveCycle(goalId)
+                        .map(goal -> canSubmitGoalToOrh(access.user(), access.context(), goal)))
+                .orElse(false);
+    }
+
+    public boolean canSubmitGoalToOrh(User user, ActiveCycleContextResponse context, GdrGoal goal) {
+        if (user == null || context == null || goal == null) {
+            return false;
+        }
+        if (!buildFeatureAccess(user, context).canViewGoals()) {
+            return false;
+        }
+        if (!context.hrPersonLinked() || !context.cycleActive() || context.personId() == null) {
+            return false;
+        }
+        if (!isGdrUsuario(user)) {
+            return false;
+        }
+        if (!ACTOR_EVALUADOR.equals(context.functionalActor())
+                && !ACTOR_EVALUADOR_Y_EVALUADO.equals(context.functionalActor())) {
+            return false;
+        }
+        return Objects.equals(goal.getAssignment().getEvaluatorPerson().getId(), context.personId());
+    }
+
     public boolean canAccessEvidenceById(Authentication authentication, Long evidenceId) {
         return resolveAccess(authentication)
                 .filter(access -> access.featureAccess().canViewEvidences())
@@ -435,6 +622,10 @@ public class GdrAccessPolicyService {
         return hasAnyTechnicalRole(user, Set.of("GDR_CONSULTA"));
     }
 
+    public boolean isJuntaDirectivos(User user) {
+        return hasAnyTechnicalRole(user, Set.of("GDR_JUNTA_DIRECTIVOS"));
+    }
+
     public User loadUserWithContext(String username) {
         return userRepository.findByUsernameWithPerson(username)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontro el usuario autenticado."));
@@ -483,6 +674,11 @@ public class GdrAccessPolicyService {
                         false,
                         false,
                         false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
                         false
                 ));
     }
@@ -505,6 +701,9 @@ public class GdrAccessPolicyService {
         }
         if (isOrh(user)) {
             return ACTOR_ORH;
+        }
+        if (isJuntaDirectivos(user)) {
+            return ACTOR_JUNTA_DIRECTIVOS;
         }
         if (isGdrConsulta(user)) {
             return ACTOR_CONSULTA;
@@ -542,6 +741,9 @@ public class GdrAccessPolicyService {
         if (ACTOR_ORH.equals(functionalActor)) {
             return SCOPE_INSTITUTIONAL;
         }
+        if (ACTOR_JUNTA_DIRECTIVOS.equals(functionalActor)) {
+            return SCOPE_INSTITUTIONAL;
+        }
         if (ACTOR_EVALUADOR_Y_EVALUADO.equals(functionalActor)) {
             return SCOPE_MIXED;
         }
@@ -568,13 +770,14 @@ public class GdrAccessPolicyService {
             return false;
         }
         return ACTOR_ORH.equals(functionalActor)
+                || ACTOR_JUNTA_DIRECTIVOS.equals(functionalActor)
                 || ACTOR_EVALUADOR.equals(functionalActor)
                 || ACTOR_EVALUADO.equals(functionalActor)
                 || ACTOR_EVALUADOR_Y_EVALUADO.equals(functionalActor);
     }
 
     private boolean requiresHrIdentity(User user) {
-        return isOrh(user) || isGdrUsuario(user) || isGdrConsulta(user);
+        return isOrh(user) || isJuntaDirectivos(user) || isGdrUsuario(user) || isGdrConsulta(user);
     }
 
     private boolean hasAnyTechnicalRole(User user, Set<String> expectedCodes) {
@@ -703,6 +906,20 @@ public class GdrAccessPolicyService {
     private boolean canAccessEvidenceResource(User user, ActiveCycleContextResponse context, GdrEvidence evidence) {
         Long evaluatedId = evidence.getGoal().getAssignment().getEvaluatedPerson().getId();
         return canAccessEvaluatedScope(user, context, evaluatedId);
+    }
+
+    private boolean canReviewGoalAchievementResource(User user, ActiveCycleContextResponse context, GdrGoal goal) {
+        if (!canAccessGoalResource(user, context, goal)) {
+            return false;
+        }
+        if (isAdminSistema(user) || isOrh(user)) {
+            return true;
+        }
+        if (!isGdrUsuario(user)) {
+            return false;
+        }
+        return ACTOR_EVALUADOR.equals(context.functionalActor())
+                || ACTOR_EVALUADOR_Y_EVALUADO.equals(context.functionalActor());
     }
 
     private boolean canReviewEvidenceResource(User user, ActiveCycleContextResponse context, GdrEvidence evidence) {

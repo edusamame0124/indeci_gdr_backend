@@ -49,6 +49,12 @@ public class GdrEvidence {
     @Column(name = "EVIDENCE_DETAIL", length = 1000)
     private String detail;
 
+    @Column(name = "CODIGO_TIPO_EVIDENCIA", nullable = false, length = 40)
+    private String evidenceTypeCode;
+
+    @Column(name = "CODIGO_FORMATO_ESPERADO", nullable = false, length = 40)
+    private String expectedFormatCode;
+
     @Column(name = "EXPECTED_DATE")
     private LocalDate expectedDate;
 

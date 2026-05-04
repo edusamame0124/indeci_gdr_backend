@@ -85,4 +85,19 @@ public interface JpaGdrEvidenceRepository extends JpaRepository<GdrEvidence, Lon
             order by evidence.updatedAt desc, evidence.id desc
             """)
     List<GdrEvidence> findActiveByGoalAssignmentIdInActiveCycle(@Param("assignmentId") Long assignmentId);
+
+    @Override
+    @Query("""
+            select count(evidence)
+            from GdrEvidence evidence
+            join evidence.goal goal
+            join goal.assignment assignment
+            join assignment.cycle cycle
+            where goal.id = :goalId
+              and upper(evidence.status) = 'ACTIVE'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+              and upper(cycle.status) = 'ACTIVE'
+            """)
+    long countActiveByGoalIdInActiveCycle(@Param("goalId") Long goalId);
 }

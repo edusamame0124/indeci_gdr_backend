@@ -44,6 +44,9 @@ public class GdrEvidenceReview {
     @Column(name = "REVIEW_COMMENT", length = 1000)
     private String reviewComment;
 
+    @Column(name = "CODIGO_CALIFICACION_EVIDENCIA", length = 40)
+    private String qualificationCode;
+
     @Column(name = "REVIEWED_AT", nullable = false)
     private LocalDateTime reviewedAt;
 

@@ -7,6 +7,10 @@ public record GuardarEvidenciaRequest(
         @NotBlank(message = "El titulo de la evidencia es obligatorio.")
         String title,
         String detail,
+        @NotBlank(message = "El tipo de evidencia es obligatorio.")
+        String evidenceTypeCode,
+        @NotBlank(message = "El formato esperado es obligatorio.")
+        String expectedFormatCode,
         LocalDate expectedDate
 ) {
 }

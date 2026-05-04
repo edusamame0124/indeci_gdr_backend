@@ -4,6 +4,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import pe.gob.gdr.access.application.dto.response.HrAssignmentSummaryResponse;
 import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
+import pe.gob.gdr.access.domain.model.GdrSegment;
 import pe.gob.gdr.access.domain.model.User;
 import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 
@@ -33,6 +34,7 @@ public class HrAssignmentService {
     }
 
     private HrAssignmentSummaryResponse mapSummary(GdrEvaluationAssignment assignment) {
+        GdrSegment segment = assignment.getSegment();
         return new HrAssignmentSummaryResponse(
                 assignment.getId(),
                 assignment.getCycle().getId(),
@@ -45,6 +47,9 @@ public class HrAssignmentService {
                 assignment.getEvaluatedPerson().getOrgUnit().getId(),
                 assignment.getEvaluatedPerson().getOrgUnit().getCode(),
                 assignment.getEvaluatedPerson().getOrgUnit().getName(),
+                segment != null ? segment.getId() : null,
+                segment != null ? segment.getCode() : null,
+                segment != null ? segment.getName() : null,
                 assignment.getStatus()
         );
     }

@@ -10,6 +10,10 @@ public record ResumenEvaluacionFinalResponse(
         String cycleName,
         Long evaluationId,
         BigDecimal consolidatedScore,
+        String qualitativeRatingCode,
+        String qualitativeRatingLabel,
+        String segmentCode,
+        String segmentName,
         String status
 ) {
 }

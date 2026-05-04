@@ -2,11 +2,13 @@ package pe.gob.gdr.access.application.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.gob.gdr.access.application.dto.request.GoalCalificacionRequest;
 import pe.gob.gdr.access.application.dto.request.GoalUpsertRequest;
 import pe.gob.gdr.access.application.dto.response.GoalDetailResponse;
 import pe.gob.gdr.access.application.dto.response.GoalSummaryResponse;
@@ -16,8 +18,10 @@ import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
 import pe.gob.gdr.access.domain.model.GdrGoal;
 import pe.gob.gdr.access.domain.model.GdrIndicator;
 import pe.gob.gdr.access.domain.model.User;
+import pe.gob.gdr.access.domain.policy.GoalScoringPolicy;
 import pe.gob.gdr.access.domain.repository.ActiveCycleRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
+import pe.gob.gdr.access.domain.repository.GdrEvidenceRepository;
 import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 import pe.gob.gdr.access.domain.repository.GdrIndicatorRepository;
 
@@ -28,6 +32,7 @@ public class GdrGoalService {
     private final GdrGoalRepository goalRepository;
     private final GdrEvaluationAssignmentRepository assignmentRepository;
     private final GdrIndicatorRepository indicatorRepository;
+    private final GdrEvidenceRepository evidenceRepository;
     private final GdrAccessPolicyService gdrAccessPolicyService;
 
     public GdrGoalService(
@@ -35,12 +40,14 @@ public class GdrGoalService {
             GdrGoalRepository goalRepository,
             GdrEvaluationAssignmentRepository assignmentRepository,
             GdrIndicatorRepository indicatorRepository,
+            GdrEvidenceRepository evidenceRepository,
             GdrAccessPolicyService gdrAccessPolicyService
     ) {
         this.activeCycleRepository = activeCycleRepository;
         this.goalRepository = goalRepository;
         this.assignmentRepository = assignmentRepository;
         this.indicatorRepository = indicatorRepository;
+        this.evidenceRepository = evidenceRepository;
         this.gdrAccessPolicyService = gdrAccessPolicyService;
     }
 
@@ -83,6 +90,29 @@ public class GdrGoalService {
         return mapDetail(goalRepository.save(goal));
     }
 
+    @Transactional
+    public GoalDetailResponse rateGoalAchievement(String username, Long goalId, GoalCalificacionRequest request) {
+        User user = gdrAccessPolicyService.loadUserWithContext(username);
+        GdrGoal goal = goalRepository.findActiveByIdInActiveCycle(goalId)
+                .orElseThrow(() -> new ResourceNotFoundException("No se encontró la meta solicitada."));
+        if (!gdrAccessPolicyService.canRateGoalAchievement(user, goal)) {
+            throw new AccessDeniedException("No tiene permisos para calificar la meta solicitada.");
+        }
+        BigDecimal expected = goal.getExpectedValue();
+        if (expected == null || expected.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new DomainException("La meta no tiene un valor esperado valido.");
+        }
+        BigDecimal achieved = request.achievedValue().setScale(4, RoundingMode.HALF_UP);
+        if (achieved.compareTo(BigDecimal.ZERO) < 0) {
+            throw new DomainException("El valor alcanzado no puede ser negativo.");
+        }
+        BigDecimal score = GoalScoringPolicy.calculateGoalScore(
+                expected, achieved, goal.getWeight(), 2, RoundingMode.HALF_UP);
+        goal.setAchievedValue(achieved);
+        goal.setCalculatedScore(score);
+        return mapDetail(goalRepository.save(goal));
+    }
+
     private void ensureActiveCycleExists() {
         if (activeCycleRepository.findActiveCycle().isEmpty()) {
             throw new DomainException("No existe un ciclo activo para registrar metas.");
@@ -103,13 +133,32 @@ public class GdrGoalService {
             throw new DomainException("La suma de pesos de la asignación no puede exceder 100.");
         }
 
+        validateGoalDates(request.startDate(), request.endDate(), assignment);
+
         goal.setAssignment(assignment);
         goal.setIndicator(indicator);
         goal.setTitle(request.title().trim());
         goal.setDescription(normalizeOptionalText(request.description()));
         goal.setExpectedValue(request.expectedValue().stripTrailingZeros());
         goal.setWeight(request.weight().setScale(2, RoundingMode.HALF_UP));
+        goal.setStartDate(request.startDate());
+        goal.setEndDate(request.endDate());
         goal.setStatus("ACTIVE");
+    }
+
+    private void validateGoalDates(LocalDate startDate, LocalDate endDate, GdrEvaluationAssignment assignment) {
+        if (startDate.isAfter(endDate)) {
+            throw new DomainException("El plazo final no puede ser menor que el plazo inicial.");
+        }
+
+        LocalDate cycleStart = assignment.getCycle().getStartDate();
+        LocalDate cycleEnd = assignment.getCycle().getEndDate();
+        if (cycleStart != null && startDate.isBefore(cycleStart)) {
+            throw new DomainException("El plazo inicial no puede ser anterior al inicio del ciclo.");
+        }
+        if (cycleEnd != null && endDate.isAfter(cycleEnd)) {
+            throw new DomainException("El plazo final no puede ser posterior al cierre del ciclo.");
+        }
     }
 
     private void ensureCanViewGoal(User user, GdrGoal goal) {
@@ -150,11 +199,16 @@ public class GdrGoalService {
                 goal.getTitle(),
                 goal.getExpectedValue(),
                 goal.getWeight(),
+                goal.getStartDate(),
+                goal.getEndDate(),
                 goal.getStatus(),
                 goal.getAssignment().getId(),
                 goal.getAssignment().getEvaluatedPerson().getDisplayName(),
                 goal.getIndicator().getId(),
-                goal.getIndicator().getName()
+                goal.getIndicator().getName(),
+                evidenceRepository.countActiveByGoalIdInActiveCycle(goal.getId()),
+                goal.getAchievedValue(),
+                goal.getCalculatedScore()
         );
     }
 
@@ -172,7 +226,11 @@ public class GdrGoalService {
                 goal.getDescription(),
                 goal.getExpectedValue(),
                 goal.getWeight(),
-                goal.getStatus()
+                goal.getStartDate(),
+                goal.getEndDate(),
+                goal.getStatus(),
+                goal.getAchievedValue(),
+                goal.getCalculatedScore()
         );
     }
 

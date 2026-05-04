@@ -9,4 +9,6 @@ public interface GdrSegmentRepository {
     List<GdrSegment> findActive();
 
     Optional<GdrSegment> findActiveById(Long id);
+
+    Optional<GdrSegment> findActiveByCode(String code);
 }

@@ -8,6 +8,8 @@ import pe.gob.gdr.access.domain.exception.ResourceNotFoundException;
 import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
 import pe.gob.gdr.access.domain.model.GdrFinalEvaluation;
 import pe.gob.gdr.access.domain.model.GdrResult;
+import pe.gob.gdr.access.domain.model.GdrSegment;
+import pe.gob.gdr.access.domain.policy.QualitativeRating;
 import pe.gob.gdr.access.domain.repository.GdrResultRepository;
 
 @Service
@@ -26,17 +28,24 @@ public class GdrResultService {
     }
 
     @Transactional
-    public GdrResult syncResult(GdrEvaluationAssignment assignment, GdrFinalEvaluation evaluation, BigDecimal consolidatedScore) {
+    public GdrResult syncResult(
+            GdrEvaluationAssignment assignment,
+            GdrFinalEvaluation evaluation,
+            BigDecimal consolidatedScore,
+            String qualitativeRatingCode
+    ) {
         GdrResult result = resultRepository.findByAssignmentIdInActiveCycle(assignment.getId())
                 .orElseGet(GdrResult::new);
         result.setAssignment(assignment);
         result.setFinalEvaluation(evaluation);
         result.setConsolidatedScore(consolidatedScore);
+        result.setQualitativeRatingCode(qualitativeRatingCode);
         result.setStatus("ACTIVE");
         return resultRepository.save(result);
     }
 
     private ResultadoResponse mapResponse(GdrResult result) {
+        GdrSegment segment = result.getAssignment().getSegment();
         return new ResultadoResponse(
                 result.getId(),
                 result.getAssignment().getId(),
@@ -45,6 +54,10 @@ public class GdrResultService {
                 result.getAssignment().getEvaluatorPerson().getDisplayName(),
                 result.getAssignment().getCycle().getName(),
                 result.getConsolidatedScore(),
+                result.getQualitativeRatingCode(),
+                QualitativeRating.labelOf(result.getQualitativeRatingCode()),
+                segment != null ? segment.getCode() : null,
+                segment != null ? segment.getName() : null,
                 result.getStatus()
         );
     }

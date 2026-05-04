@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import pe.gob.gdr.access.application.dto.request.GoalCalificacionRequest;
 import pe.gob.gdr.access.application.dto.request.GoalUpsertRequest;
 import pe.gob.gdr.access.application.dto.response.ApiResponse;
 import pe.gob.gdr.access.application.dto.response.GoalDetailResponse;
@@ -68,6 +69,19 @@ public class GdrGoalController {
         return ResponseEntity.ok(ApiResponse.ok(
                 gdrGoalService.updateGoal(authentication.getName(), goalId, request),
                 "Meta actualizada correctamente."
+        ));
+    }
+
+    @PutMapping("/{goalId}/calificacion")
+    @PreAuthorize("@gdrAccessPolicyService.canRateGoalAchievement(authentication, #goalId)")
+    public ResponseEntity<ApiResponse<GoalDetailResponse>> rateGoalAchievement(
+            @PathVariable Long goalId,
+            @Valid @RequestBody GoalCalificacionRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                gdrGoalService.rateGoalAchievement(authentication.getName(), goalId, request),
+                "Calificacion de meta registrada correctamente."
         ));
     }
 }

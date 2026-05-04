@@ -7,9 +7,15 @@ public record ResumenEvidenciaResponse(
         Long goalId,
         String title,
         String detail,
+        String evidenceTypeCode,
+        String evidenceTypeName,
+        String expectedFormatCode,
+        String expectedFormatName,
         LocalDate expectedDate,
         String statusCode,
         String statusName,
-        String latestReviewComment
+        String latestReviewComment,
+        String latestReviewQualificationCode,
+        String latestReviewQualificationName
 ) {
 }

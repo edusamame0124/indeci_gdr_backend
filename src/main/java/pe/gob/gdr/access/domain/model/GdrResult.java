@@ -47,6 +47,17 @@ public class GdrResult {
     @Builder.Default
     private BigDecimal consolidatedScore = BigDecimal.ZERO;
 
+    @Column(name = "QUALITATIVE_RATING_CODE", length = 40)
+    private String qualitativeRatingCode;
+
+    @Column(name = "QUAL_RATING_NOTIFIED", nullable = false, length = 1)
+    @Builder.Default
+    private String qualRatingNotified = "N";
+
+    @Column(name = "DIRECTIVE_82_COMPLIANCE", nullable = false, length = 1)
+    @Builder.Default
+    private String directive82Compliance = "N";
+
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";

@@ -13,6 +13,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -54,6 +55,18 @@ public class GdrGoal {
 
     @Column(name = "WEIGHT", nullable = false, precision = 5, scale = 2)
     private BigDecimal weight;
+
+    @Column(name = "ACHIEVED_VALUE", precision = 18, scale = 4)
+    private BigDecimal achievedValue;
+
+    @Column(name = "CALCULATED_SCORE", precision = 18, scale = 4)
+    private BigDecimal calculatedScore;
+
+    @Column(name = "FECHA_INICIO", nullable = false)
+    private LocalDate startDate;
+
+    @Column(name = "FECHA_FIN", nullable = false)
+    private LocalDate endDate;
 
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default

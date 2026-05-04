@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public record GoalUpsertRequest(
         @NotNull(message = "La asignacion es obligatoria.")
@@ -23,6 +24,10 @@ public record GoalUpsertRequest(
         @NotNull(message = "El peso es obligatorio.")
         @DecimalMin(value = "0.01", message = "El peso debe ser mayor a cero.")
         @DecimalMax(value = "100.00", message = "El peso no puede exceder 100.")
-        BigDecimal weight
+        BigDecimal weight,
+        @NotNull(message = "El plazo inicial es obligatorio.")
+        LocalDate startDate,
+        @NotNull(message = "El plazo final es obligatorio.")
+        LocalDate endDate
 ) {
 }

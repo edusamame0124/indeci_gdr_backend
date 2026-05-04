@@ -26,4 +26,18 @@ public interface JpaUserContextAssignmentRepository
             @Param("username") String username,
             @Param("cycleId") Long cycleId
     );
+
+    @Override
+    @Query("""
+            select uca
+            from UserContextAssignment uca
+            join fetch uca.user u
+            join fetch uca.cycle c
+            where u.id = :userId
+              and c.id = :cycleId
+            """)
+    Optional<UserContextAssignment> findByUserIdAndCycleId(
+            @Param("userId") Long userId,
+            @Param("cycleId") Long cycleId
+    );
 }

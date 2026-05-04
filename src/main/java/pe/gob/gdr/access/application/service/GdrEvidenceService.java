@@ -1,6 +1,9 @@
 package pe.gob.gdr.access.application.service;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,37 @@ public class GdrEvidenceService {
     private static final String STATUS_OBSERVED = "OBSERVED";
     private static final String STATUS_SUBSANATED = "SUBSANATED";
     private static final String STATUS_APPROVED = "APPROVED";
+    private static final Map<String, String> EVIDENCE_TYPE_NAMES = Map.of(
+            "AVANCE", "Evidencia de avance",
+            "FINAL", "Evidencia final"
+    );
+    private static final Map<String, String> EXPECTED_FORMAT_NAMES = Map.of(
+            "IMAGEN", "Imagen (JPG, PNG)",
+            "DOCUMENTO", "Documento (PDF, Word)",
+            "ACTA", "Acta (PDF)",
+            "EXCEL", "Archivo Excel",
+            "OTRO", "Otro formato"
+    );
+    private static final Map<String, String> QUALIFICATION_LABELS = Map.ofEntries(
+            Map.entry("LOGRADO", "Logrado"),
+            Map.entry("EN_PROCESO_LOGRO", "En proceso de logro"),
+            Map.entry("NO_PRESENTA_EVIDENCIA", "No presenta evidencia"),
+            Map.entry("PRESENTA_EVIDENCIA_FINAL", "Sí presenta evidencia final"),
+            Map.entry("NO_PRESENTA_EVIDENCIA_LOGRO_FINAL", "No presenta evidencia de logro final"),
+            Map.entry("OBSERVADO", "Observado")
+    );
+    private static final Set<String> ADVANCE_QUALIFICATIONS = Set.of(
+            "LOGRADO",
+            "EN_PROCESO_LOGRO",
+            "NO_PRESENTA_EVIDENCIA",
+            "OBSERVADO"
+    );
+    private static final Set<String> FINAL_QUALIFICATIONS = Set.of(
+            "PRESENTA_EVIDENCIA_FINAL",
+            "NO_PRESENTA_EVIDENCIA_LOGRO_FINAL",
+            "OBSERVADO"
+    );
+    private static final Set<String> APPROVED_QUALIFICATIONS = Set.of("LOGRADO", "PRESENTA_EVIDENCIA_FINAL");
 
     private final GdrGoalRepository goalRepository;
     private final GdrEvidenceRepository evidenceRepository;
@@ -90,10 +124,10 @@ public class GdrEvidenceService {
     @Transactional
     public DetalleEvidenciaResponse reviewEvidence(Long evidenceId, RevisionEvidenciaRequest request) {
         GdrEvidence evidence = getActiveEvidence(evidenceId);
-        String decisionCode = normalizeRequired(request.decisionCode(), "La decision de revision es obligatoria.");
-        if (!STATUS_APPROVED.equalsIgnoreCase(decisionCode) && !STATUS_OBSERVED.equalsIgnoreCase(decisionCode)) {
-            throw new DomainException("La decision de revision debe ser APPROVED u OBSERVED.");
-        }
+        String qualificationCode = normalizeRequired(request.qualificationCode(), "La calificacion de la evidencia es obligatoria.")
+                .toUpperCase(Locale.ROOT);
+        validateQualificationForEvidenceType(qualificationCode, evidence.getEvidenceTypeCode());
+        String decisionCode = resolveDecisionFromQualification(qualificationCode);
 
         GdrEvidenceStatus evidenceStatus = resolveStatus(decisionCode);
         String reviewComment = normalizeOptional(request.comment());
@@ -112,6 +146,7 @@ public class GdrEvidenceService {
                 .evidence(evidence)
                 .evidenceStatus(evidenceStatus)
                 .reviewComment(reviewComment)
+                .qualificationCode(qualificationCode)
                 .build());
 
         evidence.setEvidenceStatus(evidenceStatus);
@@ -150,6 +185,18 @@ public class GdrEvidenceService {
     private void applyEvidenceRequest(GdrEvidence evidence, GuardarEvidenciaRequest request) {
         evidence.setTitle(normalizeRequired(request.title(), "El titulo de la evidencia es obligatorio."));
         evidence.setDetail(normalizeOptional(request.detail()));
+        evidence.setEvidenceTypeCode(normalizeCatalogCode(
+                request.evidenceTypeCode(),
+                EVIDENCE_TYPE_NAMES,
+                "El tipo de evidencia es obligatorio.",
+                "El tipo de evidencia no es valido."
+        ));
+        evidence.setExpectedFormatCode(normalizeCatalogCode(
+                request.expectedFormatCode(),
+                EXPECTED_FORMAT_NAMES,
+                "El formato esperado es obligatorio.",
+                "El formato esperado no es valido."
+        ));
         evidence.setExpectedDate(request.expectedDate());
     }
 
@@ -160,10 +207,19 @@ public class GdrEvidenceService {
                 evidence.getGoal().getId(),
                 evidence.getTitle(),
                 evidence.getDetail(),
+                evidence.getEvidenceTypeCode(),
+                resolveEvidenceTypeName(evidence.getEvidenceTypeCode()),
+                evidence.getExpectedFormatCode(),
+                resolveExpectedFormatName(evidence.getExpectedFormatCode()),
                 evidence.getExpectedDate(),
                 evidence.getEvidenceStatus().getStatusCode(),
                 evidence.getEvidenceStatus().getStatusName(),
-                latestReview.map(GdrEvidenceReview::getReviewComment).orElse(null)
+                latestReview.map(GdrEvidenceReview::getReviewComment).orElse(null),
+                latestReview.map(GdrEvidenceReview::getQualificationCode).orElse(null),
+                latestReview
+                        .map(GdrEvidenceReview::getQualificationCode)
+                        .map(this::resolveQualificationName)
+                        .orElse(null)
         );
     }
 
@@ -182,6 +238,10 @@ public class GdrEvidenceService {
                 evidence.getGoal().getIndicator().getName(),
                 evidence.getTitle(),
                 evidence.getDetail(),
+                evidence.getEvidenceTypeCode(),
+                resolveEvidenceTypeName(evidence.getEvidenceTypeCode()),
+                evidence.getExpectedFormatCode(),
+                resolveExpectedFormatName(evidence.getExpectedFormatCode()),
                 evidence.getExpectedDate(),
                 evidence.getEvidenceStatus().getStatusCode(),
                 evidence.getEvidenceStatus().getStatusName(),
@@ -197,11 +257,46 @@ public class GdrEvidenceService {
                 review.getId(),
                 review.getEvidenceStatus().getStatusCode(),
                 review.getEvidenceStatus().getStatusName(),
+                review.getQualificationCode(),
+                resolveQualificationName(review.getQualificationCode()),
                 review.getReviewComment(),
                 action.map(GdrCorrectiveAction::getActionDetail).orElse(null),
                 action.map(GdrCorrectiveAction::getActionStatus).orElse(null),
                 review.getReviewedAt()
         );
+    }
+
+    private void validateQualificationForEvidenceType(String qualificationCode, String evidenceTypeCode) {
+        if (!QUALIFICATION_LABELS.containsKey(qualificationCode)) {
+            throw new DomainException("La calificacion indicada no es valida.");
+        }
+        if ("AVANCE".equalsIgnoreCase(evidenceTypeCode)) {
+            if (!ADVANCE_QUALIFICATIONS.contains(qualificationCode)) {
+                throw new DomainException("La calificacion no corresponde a una evidencia de avance.");
+            }
+            return;
+        }
+        if ("FINAL".equalsIgnoreCase(evidenceTypeCode)) {
+            if (!FINAL_QUALIFICATIONS.contains(qualificationCode)) {
+                throw new DomainException("La calificacion no corresponde a una evidencia final.");
+            }
+            return;
+        }
+        throw new DomainException("El tipo de evidencia no admite calificacion.");
+    }
+
+    private String resolveDecisionFromQualification(String qualificationCode) {
+        if (APPROVED_QUALIFICATIONS.contains(qualificationCode)) {
+            return STATUS_APPROVED;
+        }
+        return STATUS_OBSERVED;
+    }
+
+    private String resolveQualificationName(String code) {
+        if (code == null || code.isBlank()) {
+            return null;
+        }
+        return QUALIFICATION_LABELS.getOrDefault(code.toUpperCase(Locale.ROOT), code);
     }
 
     private void closeOpenCorrectiveActions(Long evidenceId) {
@@ -224,6 +319,27 @@ public class GdrEvidenceService {
             throw new DomainException(message);
         }
         return normalized;
+    }
+
+    private String normalizeCatalogCode(
+            String value,
+            Map<String, String> allowedValues,
+            String requiredMessage,
+            String invalidMessage
+    ) {
+        String normalized = normalizeRequired(value, requiredMessage).toUpperCase();
+        if (!allowedValues.containsKey(normalized)) {
+            throw new DomainException(invalidMessage);
+        }
+        return normalized;
+    }
+
+    private String resolveEvidenceTypeName(String code) {
+        return EVIDENCE_TYPE_NAMES.getOrDefault(code, code);
+    }
+
+    private String resolveExpectedFormatName(String code) {
+        return EXPECTED_FORMAT_NAMES.getOrDefault(code, code);
     }
 
     private String normalizeOptional(String value) {

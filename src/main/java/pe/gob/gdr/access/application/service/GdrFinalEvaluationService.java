@@ -22,7 +22,10 @@ import pe.gob.gdr.access.domain.model.GdrEvidence;
 import pe.gob.gdr.access.domain.model.GdrFinalEvaluation;
 import pe.gob.gdr.access.domain.model.GdrGoal;
 import pe.gob.gdr.access.domain.model.GdrScoreDetail;
+import pe.gob.gdr.access.domain.model.GdrSegment;
 import pe.gob.gdr.access.domain.model.User;
+import pe.gob.gdr.access.domain.policy.GoalScoringPolicy;
+import pe.gob.gdr.access.domain.policy.QualitativeRating;
 import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvidenceRepository;
 import pe.gob.gdr.access.domain.repository.GdrFinalEvaluationRepository;
@@ -32,8 +35,8 @@ import pe.gob.gdr.access.domain.repository.GdrScoreDetailRepository;
 @Service
 public class GdrFinalEvaluationService {
 
-    private static final int LOT3_PROVISIONAL_SCALE = 4;
-    private static final RoundingMode LOT3_PROVISIONAL_ROUNDING = RoundingMode.DOWN;
+    private static final int LOT3_SCORE_SCALE = 4;
+    private static final RoundingMode LOT3_SCORE_ROUNDING = RoundingMode.DOWN;
 
     private final GdrEvaluationAssignmentRepository assignmentRepository;
     private final GdrGoalRepository goalRepository;
@@ -107,12 +110,13 @@ public class GdrFinalEvaluationService {
                         goal.getIndicator().getName(),
                         goal.getExpectedValue(),
                         goal.getWeight(),
-                        null,
-                        null,
+                        goal.getAchievedValue(),
+                        goal.getCalculatedScore(),
                         null
                 ))
                 .toList();
 
+        GdrSegment pendingSegment = assignment.getSegment();
         return new DetalleEvaluacionFinalResponse(
                 null,
                 assignment.getId(),
@@ -121,6 +125,10 @@ public class GdrFinalEvaluationService {
                 assignment.getEvaluatorPerson().getDisplayName(),
                 assignment.getCycle().getName(),
                 null,
+                null,
+                null,
+                pendingSegment != null ? pendingSegment.getCode() : null,
+                pendingSegment != null ? pendingSegment.getName() : null,
                 "PENDIENTE",
                 null,
                 detailResponses
@@ -192,47 +200,50 @@ public class GdrFinalEvaluationService {
                 throw new DomainException("Cada meta evaluada debe contar con al menos una evidencia registrada.");
             }
 
-            BigDecimal achievedValue = normalizeProvisionalAchievedValue(input.achievedValue());
+            BigDecimal achievedValue = normalizeAchievedValue(input.achievedValue());
             return GdrScoreDetail.builder()
                     .finalEvaluation(persistedEvaluation)
                     .goal(goal)
                     .achievedValue(achievedValue)
-                    .scoreValue(calculateProvisionalLot3Score(goal, achievedValue))
+                    .scoreValue(calculateGoalScore(goal, achievedValue))
                     .detailComment(normalizeOptional(input.detailComment()))
                     .build();
         }).toList();
 
-        BigDecimal consolidatedScore = details.stream()
+        BigDecimal rawConsolidatedScore = details.stream()
                 .map(GdrScoreDetail::getScoreValue)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(LOT3_PROVISIONAL_SCALE, LOT3_PROVISIONAL_ROUNDING);
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal consolidatedScore = GoalScoringPolicy.capFinalScore(
+                rawConsolidatedScore, LOT3_SCORE_SCALE, LOT3_SCORE_ROUNDING);
+
+        String qualitativeRatingCode = resolveQualitativeRatingCode(assignment, consolidatedScore);
 
         savedEvaluation.setConsolidatedScore(consolidatedScore);
+        savedEvaluation.setQualitativeRatingCode(qualitativeRatingCode);
         savedEvaluation = finalEvaluationRepository.save(savedEvaluation);
         List<GdrScoreDetail> savedDetails = scoreDetailRepository.saveAll(details);
-        resultService.syncResult(assignment, savedEvaluation, consolidatedScore);
+        resultService.syncResult(assignment, savedEvaluation, consolidatedScore, qualitativeRatingCode);
         return mapDetail(assignment, savedEvaluation, savedDetails);
     }
 
-    /**
-     * Provisional Lote 3 scoring policy:
-     * keeps the calculation local to this service, avoids categories/tramos,
-     * and uses a conservative bounded proportional score over the goal weight.
-     * This method must be replaced when the official policy is approved.
-     */
-    private BigDecimal calculateProvisionalLot3Score(GdrGoal goal, BigDecimal achievedValue) {
+    private String resolveQualitativeRatingCode(GdrEvaluationAssignment assignment, BigDecimal score) {
+        GdrSegment segment = assignment.getSegment();
+        String segmentCode = segment != null ? segment.getCode() : null;
+        QualitativeRating rating = GoalScoringPolicy.classifyRating(score, segmentCode);
+        return rating != null ? rating.code() : null;
+    }
+
+    private BigDecimal calculateGoalScore(GdrGoal goal, BigDecimal achievedValue) {
         if (goal.getExpectedValue() == null || goal.getExpectedValue().compareTo(BigDecimal.ZERO) <= 0) {
             throw new DomainException("La meta evaluada no tiene un valor esperado valido.");
         }
-
         BigDecimal boundedAchievedValue = achievedValue.max(BigDecimal.ZERO);
-        BigDecimal proportionalScore = boundedAchievedValue
-                .multiply(goal.getWeight())
-                .divide(goal.getExpectedValue(), LOT3_PROVISIONAL_SCALE, LOT3_PROVISIONAL_ROUNDING);
-
-        return proportionalScore
-                .min(goal.getWeight())
-                .setScale(LOT3_PROVISIONAL_SCALE, LOT3_PROVISIONAL_ROUNDING);
+        return GoalScoringPolicy.calculateGoalScore(
+                goal.getExpectedValue(),
+                boundedAchievedValue,
+                goal.getWeight(),
+                LOT3_SCORE_SCALE,
+                LOT3_SCORE_ROUNDING);
     }
 
     private GdrEvaluationAssignment resolveAssignment(Long assignmentId) {
@@ -254,6 +265,8 @@ public class GdrFinalEvaluationService {
     }
 
     private ResumenEvaluacionFinalResponse mapSummary(GdrEvaluationAssignment assignment, GdrFinalEvaluation evaluation) {
+        GdrSegment segment = assignment.getSegment();
+        String ratingCode = evaluation != null ? evaluation.getQualitativeRatingCode() : null;
         return new ResumenEvaluacionFinalResponse(
                 assignment.getId(),
                 assignment.getEvaluatedPerson().getId(),
@@ -262,6 +275,10 @@ public class GdrFinalEvaluationService {
                 assignment.getCycle().getName(),
                 evaluation != null ? evaluation.getId() : null,
                 evaluation != null ? evaluation.getConsolidatedScore() : null,
+                ratingCode,
+                QualitativeRating.labelOf(ratingCode),
+                segment != null ? segment.getCode() : null,
+                segment != null ? segment.getName() : null,
                 evaluation != null ? evaluation.getStatus() : "PENDIENTE"
         );
     }
@@ -284,6 +301,8 @@ public class GdrFinalEvaluationService {
                 ))
                 .toList();
 
+        GdrSegment segment = assignment.getSegment();
+        String ratingCode = evaluation.getQualitativeRatingCode();
         return new DetalleEvaluacionFinalResponse(
                 evaluation.getId(),
                 assignment.getId(),
@@ -292,6 +311,10 @@ public class GdrFinalEvaluationService {
                 assignment.getEvaluatorPerson().getDisplayName(),
                 assignment.getCycle().getName(),
                 evaluation.getConsolidatedScore(),
+                ratingCode,
+                QualitativeRating.labelOf(ratingCode),
+                segment != null ? segment.getCode() : null,
+                segment != null ? segment.getName() : null,
                 evaluation.getStatus(),
                 evaluation.getEvaluationComment(),
                 detailResponses
@@ -306,8 +329,8 @@ public class GdrFinalEvaluationService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private BigDecimal normalizeProvisionalAchievedValue(BigDecimal achievedValue) {
-        return achievedValue.setScale(LOT3_PROVISIONAL_SCALE, LOT3_PROVISIONAL_ROUNDING);
+    private BigDecimal normalizeAchievedValue(BigDecimal achievedValue) {
+        return achievedValue.setScale(LOT3_SCORE_SCALE, LOT3_SCORE_ROUNDING);
     }
 
     private void ensureUniqueEvaluatedAssignments(List<GdrEvaluationAssignment> assignments) {
