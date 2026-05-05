@@ -12,6 +12,7 @@ public record DocumentoFirmadoDetalleResponse(
         Long idTipoDocumento,
         String codigoTipoDocumento,
         String tipoDocumento,
+        String descripcionContingencia,
         String nombreOriginal,
         String mimeType,
         Long tamanioBytes,

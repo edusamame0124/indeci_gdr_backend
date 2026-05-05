@@ -2,6 +2,8 @@ package pe.gob.gdr.access.infrastructure.persistence.repository;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -48,6 +50,43 @@ public interface JpaDocSignedFileRepository extends JpaRepository<DocSignedFile,
             order by type.name asc, document.uploadDate desc
             """)
     List<DocSignedFile> findActiveByEvaluatedIdInActiveCycle(@Param("evaluatedId") Long evaluatedId);
+
+    @Override
+    @Query(
+            value = """
+                    select document
+                    from DocSignedFile document
+                    join document.docType type
+                    join document.result result
+                    join result.assignment assignment
+                    join assignment.cycle cycle
+                    join assignment.evaluatedPerson evaluated
+                    where evaluated.id = :evaluatedId
+                      and upper(document.status) = 'ACTIVO'
+                      and upper(result.status) = 'ACTIVE'
+                      and upper(assignment.status) = 'ACTIVE'
+                      and upper(cycle.status) = 'ACTIVE'
+                    order by type.name asc, document.uploadDate desc, document.id desc
+                    """,
+            countQuery = """
+                    select count(document)
+                    from DocSignedFile document
+                    join document.docType type
+                    join document.result result
+                    join result.assignment assignment
+                    join assignment.cycle cycle
+                    join assignment.evaluatedPerson evaluated
+                    where evaluated.id = :evaluatedId
+                      and upper(document.status) = 'ACTIVO'
+                      and upper(result.status) = 'ACTIVE'
+                      and upper(assignment.status) = 'ACTIVE'
+                      and upper(cycle.status) = 'ACTIVE'
+                    """
+    )
+    Page<DocSignedFile> findPageActiveByEvaluatedIdInActiveCycle(
+            @Param("evaluatedId") Long evaluatedId,
+            Pageable pageable
+    );
 
     @Override
     @Query("""

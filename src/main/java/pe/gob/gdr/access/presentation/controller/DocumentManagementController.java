@@ -3,9 +3,13 @@ package pe.gob.gdr.access.presentation.controller;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,20 +26,30 @@ import pe.gob.gdr.access.application.dto.request.RegistrarDocumentoFirmadoReques
 import pe.gob.gdr.access.application.dto.response.ApiResponse;
 import pe.gob.gdr.access.application.dto.response.DocumentoFirmadoDetalleResponse;
 import pe.gob.gdr.access.application.dto.response.DocumentoFirmadoResumenResponse;
+import pe.gob.gdr.access.application.dto.response.HrOrgUnitOrganigramaResponse;
 import pe.gob.gdr.access.application.dto.response.InicioFirmaResponse;
+import pe.gob.gdr.access.application.dto.response.PageResponse;
 import pe.gob.gdr.access.application.dto.response.PlantillaDocumentoResponse;
 import pe.gob.gdr.access.application.dto.response.SolicitudFirmaDetalleResponse;
 import pe.gob.gdr.access.application.dto.response.TipoDocumentoResponse;
 import pe.gob.gdr.access.application.service.DocumentManagementService;
+import pe.gob.gdr.access.application.service.HrOrgUnitCatalogService;
 
 @RestController
 @RequestMapping("/documentos")
 public class DocumentManagementController {
 
-    private final DocumentManagementService documentManagementService;
+    private static final int SIGNED_DOCUMENTS_MAX_PAGE_SIZE = 100;
 
-    public DocumentManagementController(DocumentManagementService documentManagementService) {
+    private final DocumentManagementService documentManagementService;
+    private final HrOrgUnitCatalogService hrOrgUnitCatalogService;
+
+    public DocumentManagementController(
+            DocumentManagementService documentManagementService,
+            HrOrgUnitCatalogService hrOrgUnitCatalogService
+    ) {
         this.documentManagementService = documentManagementService;
+        this.hrOrgUnitCatalogService = hrOrgUnitCatalogService;
     }
 
     @GetMapping("/tipos")
@@ -64,12 +78,27 @@ public class DocumentManagementController {
 
     @GetMapping("/firmados")
     @PreAuthorize("@gdrAccessPolicyService.canAccessDocumentsForEvaluated(authentication, #evaluatedId)")
-    public ResponseEntity<ApiResponse<List<DocumentoFirmadoResumenResponse>>> listSignedDocuments(
-            @RequestParam("evaluatedId") Long evaluatedId
+    public ResponseEntity<ApiResponse<PageResponse<DocumentoFirmadoResumenResponse>>> listSignedDocuments(
+            @RequestParam("evaluatedId") Long evaluatedId,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size
     ) {
+        int safeSize = Math.min(Math.max(size, 1), SIGNED_DOCUMENTS_MAX_PAGE_SIZE);
+        int safePage = Math.max(page, 0);
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+        Page<DocumentoFirmadoResumenResponse> result = documentManagementService.listSignedDocuments(evaluatedId, pageable);
         return ResponseEntity.ok(ApiResponse.ok(
-                documentManagementService.listSignedDocuments(evaluatedId),
+                PageResponse.from(result),
                 "Documentos firmados consultados correctamente."
+        ));
+    }
+
+    @GetMapping("/unidades-organizacionales")
+    @PreAuthorize("@gdrAccessPolicyService.canViewDocuments(authentication)")
+    public ResponseEntity<ApiResponse<List<HrOrgUnitOrganigramaResponse>>> listOrganizationalUnitsForSigning() {
+        return ResponseEntity.ok(ApiResponse.ok(
+                hrOrgUnitCatalogService.listOfficesForSigning(),
+                "Oficinas consultadas correctamente."
         ));
     }
 
@@ -155,6 +184,13 @@ public class DocumentManagementController {
                 documentManagementService.registerSignedDocument(request, archivo, principal.getName()),
                 "Documento firmado registrado correctamente."
         ));
+    }
+
+    @DeleteMapping("/firmados/{documentId}")
+    @PreAuthorize("@gdrAccessPolicyService.canDeactivateSignedDocument(authentication, #documentId)")
+    public ResponseEntity<ApiResponse<Void>> deactivateSignedDocument(@PathVariable Long documentId) {
+        documentManagementService.deactivateSignedDocument(documentId);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Documento firmado desactivado correctamente."));
     }
 
     @GetMapping("/firmados/{documentId}")

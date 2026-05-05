@@ -1,0 +1,404 @@
+WHENEVER SQLERROR EXIT FAILURE ROLLBACK
+ALTER SESSION SET CURRENT_SCHEMA = &&APP_DB_SCHEMA;
+
+-- Ampliacion HR_ORG_UNIT: jerarquia organigrama y orden de listado (nombres de columna en español).
+
+ALTER TABLE HR_ORG_UNIT
+    ADD (
+        ID_UNIDAD_PADRE   NUMBER(19) NULL,
+        ORDEN_ORGANIGRAMA NUMBER(10) DEFAULT 0 NOT NULL
+    );
+
+ALTER TABLE HR_ORG_UNIT
+    ADD CONSTRAINT FK_HR_ORG_UNIT_UNIDAD_PADRE
+        FOREIGN KEY (ID_UNIDAD_PADRE)
+            REFERENCES HR_ORG_UNIT (ID_ORG_UNIT)
+        ON DELETE SET NULL;
+
+CREATE INDEX IX_HR_ORG_UNIDAD_PADRE ON HR_ORG_UNIT (ID_UNIDAD_PADRE);
+
+UPDATE HR_ORG_UNIT
+SET ORDEN_ORGANIGRAMA = 999
+WHERE UNIT_CODE = 'OTI';
+
+-- Organigrama para selector de firma (orden jerárquico estable)
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'DESP_JEF' AS UNIT_CODE,
+           'Despacho Jefatural' AS UNIT_NAME,
+           CAST(NULL AS VARCHAR2(40 CHAR)) AS PARENT_CODE,
+           10 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = NULL,
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        NULL,
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'ORG_CTRL_INST' AS UNIT_CODE,
+           UNISTR('\00D3rgano de Control Institucional') AS UNIT_NAME,
+           'DESP_JEF' AS PARENT_CODE,
+           20 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'SEC_GRAL' AS UNIT_CODE,
+           UNISTR('Secretar\00EDa General') AS UNIT_NAME,
+           'DESP_JEF' AS PARENT_CODE,
+           30 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'OF_AS_JUR' AS UNIT_CODE,
+           UNISTR('Oficina de Asesor\00EDa Jur\00EDdica') AS UNIT_NAME,
+           'SEC_GRAL' AS PARENT_CODE,
+           40 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'OF_PLA_PPTO' AS UNIT_CODE,
+           'Oficina de Planeamiento y Presupuesto' AS UNIT_NAME,
+           'SEC_GRAL' AS PARENT_CODE,
+           50 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'OF_GRAL_ADM' AS UNIT_CODE,
+           UNISTR('Oficina General de Administraci\00F3n') AS UNIT_NAME,
+           'SEC_GRAL' AS PARENT_CODE,
+           60 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'OF_INFORM' AS UNIT_CODE,
+           UNISTR('Oficina de Inform\00E1tica') AS UNIT_NAME,
+           'SEC_GRAL' AS PARENT_CODE,
+           70 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'UNI_REV_APEL' AS UNIT_CODE,
+           UNISTR('Unidad de Revisi\00F3n de Apelaciones') AS UNIT_NAME,
+           'OF_AS_JUR' AS PARENT_CODE,
+           80 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'UNI_PLA_PPTO' AS UNIT_CODE,
+           'Unidad de Planeamiento y Presupuesto' AS UNIT_NAME,
+           'OF_PLA_PPTO' AS PARENT_CODE,
+           90 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );
+
+MERGE INTO HR_ORG_UNIT target
+USING (
+    SELECT 'UNI_RACIONAL' AS UNIT_CODE,
+           UNISTR('Unidad de Racionalizaci\00F3n') AS UNIT_NAME,
+           'OF_PLA_PPTO' AS PARENT_CODE,
+           100 AS ORDEN_ORGANIGRAMA
+    FROM DUAL
+) src
+ON (target.UNIT_CODE = src.UNIT_CODE)
+WHEN MATCHED THEN
+    UPDATE SET
+        target.UNIT_NAME = src.UNIT_NAME,
+        target.ID_UNIDAD_PADRE = (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        target.ORDEN_ORGANIGRAMA = src.ORDEN_ORGANIGRAMA,
+        target.STATUS = 'ACTIVE',
+        target.UPDATED_AT = SYSTIMESTAMP
+WHEN NOT MATCHED THEN
+    INSERT (
+        ID_ORG_UNIT,
+        UNIT_CODE,
+        UNIT_NAME,
+        ID_UNIDAD_PADRE,
+        ORDEN_ORGANIGRAMA,
+        STATUS,
+        CREATED_AT,
+        UPDATED_AT
+    )
+    VALUES (
+        SQ_HR_ORG_UNIT.NEXTVAL,
+        src.UNIT_CODE,
+        src.UNIT_NAME,
+        (SELECT p.ID_ORG_UNIT FROM HR_ORG_UNIT p WHERE p.UNIT_CODE = src.PARENT_CODE),
+        src.ORDEN_ORGANIGRAMA,
+        'ACTIVE',
+        SYSTIMESTAMP,
+        SYSTIMESTAMP
+    );

@@ -19,6 +19,8 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.MediaType;
@@ -64,6 +66,7 @@ import pe.gob.gdr.access.infrastructure.config.DocumentStorageProperties;
 @Service
 public class DocumentManagementService {
 
+    private static final String INACTIVE_STATUS = "INACTIVO";
     private static final String ACTIVE_STATUS = "ACTIVO";
     private static final Set<String> PDF_EXTENSIONS = Set.of(".pdf");
     private static final String FLOW_LISTO_PARA_FIRMA = "LISTO_PARA_FIRMA";
@@ -76,6 +79,7 @@ public class DocumentManagementService {
     private static final String FLOW_FIRMA_CANCELADA = "FIRMA_CANCELADA";
     private static final String ACTIVE_FLOW_INDICATOR = "S";
     private static final String CLOSED_FLOW_INDICATOR = "N";
+    private static final String DOC_TYPE_CODE_CONTINGENCY_OTROS = "OTROS";
     private static final int PDF_FONT_SIZE = 12;
     private static final int PDF_TOP_Y = 760;
     private static final int PDF_LEFT_X = 48;
@@ -152,10 +156,9 @@ public class DocumentManagementService {
                 .toList();
     }
 
-    public List<DocumentoFirmadoResumenResponse> listSignedDocuments(Long evaluatedId) {
-        return docSignedFileRepository.findActiveByEvaluatedIdInActiveCycle(evaluatedId).stream()
-                .map(this::mapSummaryResponse)
-                .toList();
+    public Page<DocumentoFirmadoResumenResponse> listSignedDocuments(Long evaluatedId, Pageable pageable) {
+        return docSignedFileRepository.findPageActiveByEvaluatedIdInActiveCycle(evaluatedId, pageable)
+                .map(this::mapSummaryResponse);
     }
 
     public DocumentoFirmadoDetalleResponse getSignedDocument(Long documentId) {
@@ -368,7 +371,8 @@ public class DocumentManagementService {
                                     : signedFile.getOriginalFilename()
                     ),
                     normalizeMimeType(signedFile.getContentType()),
-                    username
+                    username,
+                    null
             );
             signatureRequest.setSignedDocument(storedDocument);
             signatureRequest.setDocumentRegisteredAt(LocalDateTime.now());
@@ -400,8 +404,9 @@ public class DocumentManagementService {
             throw new DomainException("Debe adjuntar el documento firmado.");
         }
 
-        DocType docType = docTypeRepository.findActiveById(request.tipoDocumentoId())
-                .orElseThrow(() -> new ResourceNotFoundException("No se encontro el tipo documental solicitado."));
+        DocType docType = docTypeRepository.findActiveByCode(DOC_TYPE_CODE_CONTINGENCY_OTROS)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No se encontro el tipo documental OTROS para carga por contingencia. Verifique el catalogo DOC_TIPO_DOCUMENTO."));
         GdrResult result = findResultByEvaluatedId(request.evaluatedId());
         validateNoActiveSignedDocument(result.getId(), docType.getId());
 
@@ -409,13 +414,15 @@ public class DocumentManagementService {
 
         try {
             byte[] content = archivo.getBytes();
+            String descripcionContingencia = normalizeContingencyDescription(request.descripcion());
             DocSignedFile signedFile = persistSignedDocument(
                     result,
                     docType,
                     content,
                     sanitizeOriginalName(archivo.getOriginalFilename()),
                     normalizeMimeType(archivo.getContentType()),
-                    username
+                    username,
+                    descripcionContingencia
             );
             notificacionesService.emitForUser(
                     username,
@@ -429,6 +436,15 @@ public class DocumentManagementService {
             }
             throw new DomainException("No se pudo registrar el documento firmado.");
         }
+    }
+
+    @Transactional
+    public void deactivateSignedDocument(Long documentId) {
+        DocSignedFile document = docSignedFileRepository.findActiveById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("No se encontro el documento firmado solicitado."));
+        document.setStatus(INACTIVE_STATUS);
+        document.setUpdatedAt(LocalDateTime.now());
+        docSignedFileRepository.save(document);
     }
 
     private void validateUploadedFile(MultipartFile file) {
@@ -515,7 +531,9 @@ public class DocumentManagementService {
                 document.getResult().getAssignment().getEvaluatedPerson().getId(),
                 document.getResult().getAssignment().getEvaluatedPerson().getDisplayName(),
                 document.getDocType().getId(),
+                document.getDocType().getCode(),
                 document.getDocType().getName(),
+                document.getContingencyDescription(),
                 document.getOriginalName(),
                 document.getMimeType(),
                 document.getSizeBytes(),
@@ -537,6 +555,7 @@ public class DocumentManagementService {
                 document.getDocType().getId(),
                 document.getDocType().getCode(),
                 document.getDocType().getName(),
+                document.getContingencyDescription(),
                 document.getOriginalName(),
                 document.getMimeType(),
                 document.getSizeBytes(),
@@ -545,6 +564,13 @@ public class DocumentManagementService {
                 document.getUploadUser(),
                 document.getUploadDate()
         );
+    }
+
+    private String normalizeContingencyDescription(String descripcion) {
+        if (descripcion == null) {
+            return "";
+        }
+        return descripcion.trim();
     }
 
     private SolicitudFirmaDetalleResponse mapSignatureResponse(DocSignatureRequest request) {
@@ -912,11 +938,14 @@ public class DocumentManagementService {
             byte[] content,
             String originalName,
             String mimeType,
-            String username
+            String username,
+            String contingencyDescription
     ) {
         String fileKey = documentStoragePort.store("documentos-firmados", ".pdf", content);
         String hashValue = calculateSha256(content);
         String normalizedMimeType = mimeType == null || mimeType.isBlank() ? "application/pdf" : mimeType;
+        String normalizedContingencyDescription =
+                contingencyDescription != null && !contingencyDescription.isBlank() ? contingencyDescription.trim() : null;
 
         DocSignedFile signedFile = DocSignedFile.builder()
                 .result(result)
@@ -929,6 +958,7 @@ public class DocumentManagementService {
                 .status(ACTIVE_STATUS)
                 .uploadUser(username)
                 .uploadDate(LocalDateTime.now())
+                .contingencyDescription(normalizedContingencyDescription)
                 .build();
         signedFile = docSignedFileRepository.save(signedFile);
 

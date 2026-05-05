@@ -29,4 +29,13 @@ public interface JpaDocTypeRepository extends JpaRepository<DocType, Long>, DocT
               and upper(type.status) = 'ACTIVO'
             """)
     Optional<DocType> findActiveById(@Param("typeId") Long typeId);
+
+    @Override
+    @Query("""
+            select type
+            from DocType type
+            where upper(trim(type.code)) = upper(trim(:code))
+              and upper(type.status) = 'ACTIVO'
+            """)
+    Optional<DocType> findActiveByCode(@Param("code") String code);
 }

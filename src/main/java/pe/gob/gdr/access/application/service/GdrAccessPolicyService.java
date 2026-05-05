@@ -383,7 +383,19 @@ public class GdrAccessPolicyService {
         return resolveAccess(authentication)
                 .filter(access -> access.featureAccess().canViewDocuments())
                 .flatMap(access -> docSignedFileRepository.findActiveById(documentId)
-                        .map(document -> canAccessDocumentResource(access.user(), access.context(), document)))
+                        .map(documentItem -> canAccessDocumentResource(access.user(), access.context(), documentItem)))
+                .orElse(false);
+    }
+
+    public boolean canDeactivateSignedDocument(Authentication authentication, Long documentId) {
+        return resolveAccess(authentication)
+                .filter(access -> access.featureAccess().canRegisterSignedDocuments())
+                .map(access -> docSignedFileRepository.findActiveById(documentId)
+                        .map(documentItem -> {
+                            Long evaluatedId = documentItem.getResult().getAssignment().getEvaluatedPerson().getId();
+                            return canManageEvaluatedFlow(access.user(), access.context(), evaluatedId);
+                        })
+                        .orElse(false))
                 .orElse(false);
     }
 

@@ -9,4 +9,6 @@ public interface DocTypeRepository {
     List<DocType> findActiveTypes();
 
     Optional<DocType> findActiveById(Long typeId);
+
+    Optional<DocType> findActiveByCode(String code);
 }

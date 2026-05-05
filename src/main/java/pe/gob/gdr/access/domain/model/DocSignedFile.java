@@ -65,6 +65,9 @@ public class DocSignedFile {
     @Column(name = "USUARIO_CARGA", nullable = false, length = 120)
     private String uploadUser;
 
+    @Column(name = "DESCRIPCION_CONTINGENCIA", length = 400)
+    private String contingencyDescription;
+
     @Column(name = "FECHA_CARGA", nullable = false)
     private LocalDateTime uploadDate;
 
