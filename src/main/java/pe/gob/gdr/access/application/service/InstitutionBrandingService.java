@@ -95,9 +95,9 @@ public class InstitutionBrandingService {
     }
 
     private LoginBrandingResponse toLoginBrandingResponse(InstitutionBranding branding) {
-        boolean hasLogoRoute = hasValidLogoRoute(branding);
+        boolean hasLogoRoute = hasAvailableLogo(branding);
         String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().toUriString();
-        String logoUrl = hasLogoRoute ? baseUrl + "/public/branding/login/logo" : null;
+        String logoUrl = hasLogoRoute ? baseUrl + "/public/branding/login/logo?v=" + logoVersion(branding) : null;
 
         return new LoginBrandingResponse(
                 branding.getInstitutionName(),
@@ -116,6 +116,17 @@ public class InstitutionBrandingService {
                 && !branding.getLogoRuta().isBlank()
                 && branding.getLogoMimeType() != null
                 && ALLOWED_MIME_TYPES.contains(branding.getLogoMimeType().trim().toLowerCase(Locale.ROOT));
+    }
+
+    private boolean hasAvailableLogo(InstitutionBranding branding) {
+        return hasValidLogoRoute(branding) && documentStoragePort.exists(branding.getLogoRuta());
+    }
+
+    private String logoVersion(InstitutionBranding branding) {
+        if (branding.getUpdatedAt() != null) {
+            return String.valueOf(branding.getUpdatedAt().toString().hashCode());
+        }
+        return String.valueOf(branding.getLogoRuta().hashCode());
     }
 
     private void applyLogo(InstitutionBranding branding, MultipartFile logo) {

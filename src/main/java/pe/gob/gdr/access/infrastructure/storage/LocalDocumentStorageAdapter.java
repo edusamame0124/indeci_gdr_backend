@@ -62,6 +62,13 @@ public class LocalDocumentStorageAdapter implements DocumentStoragePort {
         }
     }
 
+    @Override
+    public boolean exists(String fileKey) {
+        Path targetPath = basePath.resolve(fileKey).normalize();
+        ensureInsideBasePath(targetPath);
+        return Files.exists(targetPath) && Files.isRegularFile(targetPath);
+    }
+
     private void ensureInsideBasePath(Path targetPath) {
         if (!targetPath.startsWith(basePath)) {
             throw new DomainException("La clave documental solicitada no es valida.");
