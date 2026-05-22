@@ -58,6 +58,21 @@ public class GdrEvidence {
     @Column(name = "EXPECTED_DATE")
     private LocalDate expectedDate;
 
+    @Column(name = "FILE_KEY", length = 500)
+    private String fileKey;
+
+    @Column(name = "FILE_ORIGINAL_NAME", length = 255)
+    private String fileOriginalName;
+
+    @Column(name = "FILE_MIME_TYPE", length = 120)
+    private String fileMimeType;
+
+    @Column(name = "FILE_SIZE_BYTES")
+    private Long fileSizeBytes;
+
+    @Column(name = "FILE_UPLOADED_AT")
+    private LocalDateTime fileUploadedAt;
+
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";

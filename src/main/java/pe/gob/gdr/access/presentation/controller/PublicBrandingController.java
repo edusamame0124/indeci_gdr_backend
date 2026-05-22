@@ -1,6 +1,6 @@
 package pe.gob.gdr.access.presentation.controller;
 
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,12 +28,17 @@ public class PublicBrandingController {
     }
 
     @GetMapping("/login/logo/header")
-    public ResponseEntity<ByteArrayResource> getHeaderLogo() {
+    public ResponseEntity<Resource> getHeaderLogo() {
         return institutionBrandingService.getHeaderLogo();
     }
 
     @GetMapping("/login/logo/main")
-    public ResponseEntity<ByteArrayResource> getMainLogo() {
+    public ResponseEntity<Resource> getMainLogo() {
         return institutionBrandingService.getMainLogo();
+    }
+
+    @GetMapping("/login/logo")
+    public ResponseEntity<Resource> getLogo() {
+        return institutionBrandingService.getLogoFromStorage(false);
     }
 }

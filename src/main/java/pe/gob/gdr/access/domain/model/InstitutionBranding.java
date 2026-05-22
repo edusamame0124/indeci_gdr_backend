@@ -5,7 +5,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.SequenceGenerator;
@@ -39,19 +38,23 @@ public class InstitutionBranding {
     @Column(name = "INSTITUTION_NAME", nullable = false, length = 200)
     private String institutionName;
 
-    @Lob
-    @Column(name = "MAIN_LOGO")
-    private byte[] mainLogo;
+    @Column(name = "NOMBRE_CORTO", length = 80)
+    private String nombreCorto;
 
-    @Column(name = "MAIN_LOGO_MIME_TYPE", length = 100)
-    private String mainLogoMimeType;
+    @Column(name = "RUC", length = 11)
+    private String ruc;
 
-    @Lob
-    @Column(name = "HEADER_LOGO")
-    private byte[] headerLogo;
+    @Column(name = "DIRECCION", length = 300)
+    private String direccion;
 
-    @Column(name = "HEADER_LOGO_MIME_TYPE", length = 100)
-    private String headerLogoMimeType;
+    @Column(name = "LOGO_RUTA", length = 500)
+    private String logoRuta;
+
+    @Column(name = "LOGO_MIME_TYPE", length = 100)
+    private String logoMimeType;
+
+    @Column(name = "LOGO_NOMBRE_ORIGINAL", length = 255)
+    private String logoNombreOriginal;
 
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
