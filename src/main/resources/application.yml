@@ -86,7 +86,7 @@ app:
       consulta-estado-habilitada: ${GDR_FIRMA_CONSULTA:false}
       retorno-automatico-habilitado: ${GDR_FIRMA_RETORNO:false}
 
-  # Formato GDR PDF generado (OpenPDF); ver docs/formato_gdr/README.md y specs/SDD_GDR_ACCESS.md §11.4.1
+  # Formato GDR PDF generado (OpenPDF)
   formato-gdr-pdf:
     entity-name: "${GDR_FORMATO_GDR_ENTITY:Agencia de compras de las Fuerzas Armadas}"
     entity-tagline: "${GDR_FORMATO_GDR_TAGLINE:Comprando para la Seguridad y Defensa Nacional}"
@@ -95,10 +95,15 @@ app:
     form-revision: "${GDR_FORMATO_GDR_REVISION:Rev: nov-2025}"
     servir-footer-note: "${GDR_FORMATO_GDR_SERVIR_FOOTER:AUTORIDAD NACIONAL DEL SERVICIO CIVIL - SERVIR}"
     draft-banner-note: "${GDR_FORMATO_GDR_DRAFT_BANNER:BORRADOR: Datos según avance al momento. Cierre de evaluación pendiente; no sustituye acta consolidada.}"
+
     segment-display-aliases:
       GENERAL: EJECUTOR
 
 management:
+  endpoint:
+    health:
+      show-details: always
+
   endpoints:
     web:
       exposure:
