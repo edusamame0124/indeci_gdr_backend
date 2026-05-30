@@ -1,5 +1,5 @@
 server:
-  port: ${GDR_SERVER_PORT:8080}
+  port: ${GDR_SERVER_PORT:8082}
   servlet:
     context-path: /api/gdr-access
 
@@ -88,7 +88,7 @@ app:
 
   # Formato GDR PDF generado (OpenPDF)
   formato-gdr-pdf:
-    entity-name: "${GDR_FORMATO_GDR_ENTITY:Agencia de compras de las Fuerzas Armadas}"
+    entity-name: "${GDR_FORMATO_GDR_ENTITY:Instituto Nacional de Defensa Civil}"
     entity-tagline: "${GDR_FORMATO_GDR_TAGLINE:Comprando para la Seguridad y Defensa Nacional}"
     header-logo-path: "${GDR_FORMATO_GDR_HEADER_LOGO:classpath:assets/formato_gdr/logo_institucional.png}"
     form-version: ${GDR_FORMATO_GDR_VERSION:v01}

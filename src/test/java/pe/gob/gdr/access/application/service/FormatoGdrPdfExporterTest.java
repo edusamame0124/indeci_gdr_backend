@@ -12,8 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import pe.gob.gdr.access.domain.model.ActiveCycle;
 import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
 import pe.gob.gdr.access.domain.model.GdrEvidence;
@@ -44,23 +42,14 @@ class FormatoGdrPdfExporterTest {
     @Mock
     private GdrImprovementOpportunityRepository improvementRepository;
 
-    @Mock
-    private ResourceLoader resourceLoader;
-
-    @Mock
-    private Resource headerLogoResource;
-
     private FormatoGdrPdfExporter exporter;
 
     @BeforeEach
     void setUp() {
         FormatoGdrPdfProperties properties = new FormatoGdrPdfProperties();
         properties.setEntityName("Entidad de prueba");
-        when(resourceLoader.getResource(org.mockito.ArgumentMatchers.anyString())).thenReturn(headerLogoResource);
-        when(headerLogoResource.exists()).thenReturn(false);
         exporter = new FormatoGdrPdfExporter(
                 properties,
-                resourceLoader,
                 goalRepository,
                 evidenceRepository,
                 improvementRepository

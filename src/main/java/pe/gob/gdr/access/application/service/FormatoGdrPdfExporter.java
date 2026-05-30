@@ -5,7 +5,6 @@ import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
 import com.lowagie.text.FontFactory;
-import com.lowagie.text.Image;
 import com.lowagie.text.PageSize;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
@@ -22,8 +21,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 import pe.gob.gdr.access.domain.exception.DomainException;
 import pe.gob.gdr.access.domain.model.ActiveCycle;
@@ -53,20 +50,17 @@ public class FormatoGdrPdfExporter {
     private static final Color HEADER_ORANGE = new Color(228, 108, 10);
     private static final Color LABEL_GREY = new Color(217, 217, 217);
     private final FormatoGdrPdfProperties properties;
-    private final ResourceLoader resourceLoader;
     private final GdrGoalRepository goalRepository;
     private final GdrEvidenceRepository evidenceRepository;
     private final GdrImprovementOpportunityRepository improvementRepository;
 
     public FormatoGdrPdfExporter(
             FormatoGdrPdfProperties properties,
-            ResourceLoader resourceLoader,
             GdrGoalRepository goalRepository,
             GdrEvidenceRepository evidenceRepository,
             GdrImprovementOpportunityRepository improvementRepository
     ) {
         this.properties = properties;
-        this.resourceLoader = resourceLoader;
         this.goalRepository = goalRepository;
         this.evidenceRepository = evidenceRepository;
         this.improvementRepository = improvementRepository;
@@ -171,20 +165,7 @@ public class FormatoGdrPdfExporter {
         cell.setPadding(8);
     }
 
-    /**
-     * Celda izquierda: únicamente el logo institucional centrado (sin texto auxiliar).
-     */
     private PdfPCell buildLeftHeaderCell() {
-        Image logo = loadHeaderLogoImage();
-        if (logo != null) {
-            logo.scaleToFit(52f, 52f);
-            PdfPCell imgCell = new PdfPCell(logo, false);
-            imgCell.setBorder(PdfPCell.NO_BORDER);
-            imgCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
-            imgCell.setHorizontalAlignment(Element.ALIGN_CENTER);
-            imgCell.setPadding(6);
-            return imgCell;
-        }
         PdfPCell empty = new PdfPCell(new Phrase(" "));
         empty.setBorder(PdfPCell.NO_BORDER);
         empty.setMinimumHeight(52f);
@@ -228,22 +209,6 @@ public class FormatoGdrPdfExporter {
             return t.substring(0, idx).trim() + "\n" + t.substring(idx).trim();
         }
         return t;
-    }
-
-    private Image loadHeaderLogoImage() {
-        try {
-            Resource resource = resourceLoader.getResource(properties.getHeaderLogoPath().trim());
-            if (!resource.exists() || !resource.isReadable()) {
-                return null;
-            }
-            byte[] data = resource.getContentAsByteArray();
-            if (data.length == 0) {
-                return null;
-            }
-            return Image.getInstance(data);
-        } catch (Exception ignored) {
-            return null;
-        }
     }
 
     /**
