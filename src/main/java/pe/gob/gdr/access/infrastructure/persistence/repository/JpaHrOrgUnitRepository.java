@@ -63,4 +63,13 @@ public interface JpaHrOrgUnitRepository extends JpaRepository<HrOrgUnit, Long>, 
               and upper(orgUnit.status) = 'ACTIVE'
             """)
     Optional<HrOrgUnit> findActiveById(@Param("id") Long id);
+
+    @Override
+    @Query("""
+            select orgUnit
+            from HrOrgUnit orgUnit
+            where upper(orgUnit.code) = upper(:code)
+              and upper(orgUnit.status) = 'ACTIVE'
+            """)
+    Optional<HrOrgUnit> findActiveByCode(@Param("code") String code);
 }

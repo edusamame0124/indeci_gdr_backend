@@ -91,6 +91,37 @@ public class JwtTokenProvider {
         return list.stream().map(String::valueOf).collect(Collectors.toList());
     }
 
+    /**
+     * SSO Fase 4 — DNI del titular (claim {@code dni}). Llave puente para
+     * crear/vincular el {@code HR_PERSON} local. NULL si el token no lo trae
+     * (cuentas técnicas legacy sin persona en el SISRH).
+     */
+    public String getDni(String token) {
+        return extractAllClaims(token).get("dni", String.class);
+    }
+
+    /**
+     * SSO Fase 4 — nombre completo del titular (claim {@code nombre}). Se usa
+     * como {@code DISPLAY_NAME} institucional al crear el HrPerson. NULL si no viene.
+     */
+    public String getNombre(String token) {
+        return extractAllClaims(token).get("nombre", String.class);
+    }
+
+    /**
+     * SSO Fase 4 — oficina asignada en el SISRH para el sistema indicado, leída
+     * del claim anidado areas.&lt;codigo&gt;. Equivale al {@code UNIT_CODE} de
+     * HR_ORG_UNIT. NULL si no aplica.
+     */
+    public String getSistemaArea(String token, String sistemaCodigo) {
+        Object areas = extractAllClaims(token).get("areas");
+        if (!(areas instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object area = map.get(sistemaCodigo);
+        return area != null ? String.valueOf(area) : null;
+    }
+
     public boolean isRefreshToken(String token) {
         return "refresh".equals(extractAllClaims(token).get("type", String.class));
     }

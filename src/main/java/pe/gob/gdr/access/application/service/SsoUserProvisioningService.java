@@ -16,9 +16,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import pe.gob.gdr.access.domain.model.HrOrgUnit;
+import pe.gob.gdr.access.domain.model.HrPerson;
 import pe.gob.gdr.access.domain.model.Role;
 import pe.gob.gdr.access.domain.model.User;
 import pe.gob.gdr.access.domain.model.UserRole;
+import pe.gob.gdr.access.domain.repository.HrOrgUnitRepository;
+import pe.gob.gdr.access.domain.repository.HrPersonRepository;
 import pe.gob.gdr.access.domain.repository.RoleRepository;
 import pe.gob.gdr.access.domain.repository.UserRepository;
 
@@ -56,39 +60,54 @@ public class SsoUserProvisioningService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final HrPersonRepository hrPersonRepository;
+    private final HrOrgUnitRepository hrOrgUnitRepository;
     private final SecureRandom random = new SecureRandom();
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public SsoUserProvisioningService(UserRepository userRepository, RoleRepository roleRepository) {
+    public SsoUserProvisioningService(UserRepository userRepository,
+                                      RoleRepository roleRepository,
+                                      HrPersonRepository hrPersonRepository,
+                                      HrOrgUnitRepository hrOrgUnitRepository) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
+        this.hrPersonRepository = hrPersonRepository;
+        this.hrOrgUnitRepository = hrOrgUnitRepository;
     }
 
     /**
-     * Garantiza la ficha local del usuario SSO y sincroniza sus roles.
+     * Garantiza la ficha local del usuario SSO, vincula/crea su HrPerson por DNI
+     * y sincroniza sus roles.
      *
      * @param username      subject del token SISRH (== USERNAME local).
      * @param rolesDelToken roles del claim sistemas.rendimiento (vienen SIN
      *                      prefijo ROLE_; coinciden con SEC_ROLE.ROLE_CODE).
+     * @param dni           claim {@code dni}: llave puente con HR_PERSON.
+     * @param nombre        claim {@code nombre}: DISPLAY_NAME al crear persona.
+     * @param areaCodigo    claim {@code areas.rendimiento}: UNIT_CODE de la
+     *                      oficina (fallback sólo para personas nuevas).
      */
-    public void ensureLocalUser(String username, List<String> rolesDelToken) {
+    public void ensureLocalUser(String username, List<String> rolesDelToken,
+                                String dni, String nombre, String areaCodigo) {
         if (username == null || username.isBlank()) {
             return;
         }
         User user = userRepository.findByUsername(username).orElse(null);
         if (user == null) {
-            user = crearUsuarioSso(username);
+            user = crearUsuarioSso(username, nombre);
         }
+        vincularPersona(user, dni, nombre, areaCodigo);
         sincronizarRoles(user, rolesDelToken);
     }
 
-    private User crearUsuarioSso(String username) {
+    private User crearUsuarioSso(String username, String nombre) {
         try {
+            String displayName = (nombre != null && !nombre.isBlank()) ? nombre.trim() : username;
             User nuevo = User.builder()
                     .username(username)
                     .passwordHash(passwordEncoder.encode(passwordAleatoria()))
                     .email(emailSintetico(username))
-                    .displayName(username)
+                    .displayName(displayName)
                     .person(null)
                     .status(ESTADO_ACTIVO)
                     .failedAttempts(0)
@@ -100,6 +119,66 @@ public class SsoUserProvisioningService {
             // Otra request concurrente lo creó primero (primer ingreso dispara
             // varias llamadas en paralelo desde el dashboard).
             return userRepository.findByUsername(username).orElseThrow(() -> carrera);
+        }
+    }
+
+    /**
+     * Vincula el usuario SSO con su ficha de RR. HH. (HR_PERSON) por DNI:
+     * <ul>
+     *   <li>Si el DNI ya existe en HR_PERSON, se enlaza respetando su oficina
+     *       actual (GDR es la fuente de verdad para personas existentes).</li>
+     *   <li>Si no existe, se crea una ficha mínima con la oficina del token como
+     *       fallback (sólo para altas nuevas).</li>
+     * </ul>
+     * Best-effort: si no hay DNI o no se puede resolver la oficina para un alta
+     * nueva, no se crea la persona y la autenticación procede con sólo roles.
+     */
+    private void vincularPersona(User user, String dni, String nombre, String areaCodigo) {
+        if (dni == null || dni.isBlank()) {
+            return;
+        }
+        String documento = dni.trim();
+        HrPerson actual = user.getPerson();
+        if (actual != null && documento.equals(actual.getDocumentNumber())) {
+            return;
+        }
+        HrPerson persona = hrPersonRepository.findActiveByDocumentNumber(documento)
+                .orElseGet(() -> crearPersonaMinima(documento, nombre, areaCodigo));
+        if (persona == null) {
+            return;
+        }
+        if (actual == null || !persona.getId().equals(actual.getId())) {
+            user.setPerson(persona);
+            userRepository.save(user);
+            log.info("[SSO] HrPerson vinculada al usuario {} (DNI {})", user.getUsername(), documento);
+        }
+    }
+
+    private HrPerson crearPersonaMinima(String documento, String nombre, String areaCodigo) {
+        if (areaCodigo == null || areaCodigo.isBlank()) {
+            log.warn("[SSO] No se crea HrPerson para DNI {}: el token no trae oficina (areas.rendimiento)", documento);
+            return null;
+        }
+        HrOrgUnit oficina = hrOrgUnitRepository.findActiveByCode(areaCodigo.trim()).orElse(null);
+        if (oficina == null) {
+            log.warn("[SSO] No se crea HrPerson para DNI {}: oficina '{}' no existe/activa en HR_ORG_UNIT",
+                    documento, areaCodigo);
+            return null;
+        }
+        String displayName = (nombre != null && !nombre.isBlank()) ? nombre.trim() : ("Usuario " + documento);
+        try {
+            HrPerson nueva = HrPerson.builder()
+                    .documentNumber(documento)
+                    .displayName(displayName)
+                    .orgUnit(oficina)
+                    .status(ESTADO_ACTIVO)
+                    .build();
+            HrPerson guardada = hrPersonRepository.save(nueva);
+            log.info("[SSO] HrPerson mínima creada (DNI {}, oficina {})", documento, areaCodigo);
+            return guardada;
+        } catch (DataIntegrityViolationException carrera) {
+            // Otra request concurrente la creó primero (UNIQUE DOCUMENT_NUMBER).
+            return hrPersonRepository.findActiveByDocumentNumber(documento).orElse(null);
         }
     }
 

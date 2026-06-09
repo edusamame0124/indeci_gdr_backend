@@ -60,11 +60,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     List<SimpleGrantedAuthority> authorities = rolesSso.stream()
                             .map(this::toAuthority)
                             .collect(Collectors.toList());
+                    // SSO Fase 4: el token trae DNI, nombre y oficina (areas.rendimiento)
+                    // para crear/vincular el HrPerson local.
+                    String dni = jwtTokenProvider.getDni(token);
+                    String nombre = jwtTokenProvider.getNombre(token);
+                    String area = jwtTokenProvider.getSistemaArea(token, "rendimiento");
                     // JIT provisioning: la identidad vive en el SISRH, pero el negocio
                     // de GDR exige ficha local. Best-effort: si falla, se loguea y la
                     // autenticación procede igual.
                     try {
-                        ssoUserProvisioningService.ensureLocalUser(username, rolesSso);
+                        ssoUserProvisioningService.ensureLocalUser(username, rolesSso, dni, nombre, area);
                     } catch (Exception ex) {
                         logger.error("[SSO] Fallo al aprovisionar usuario local '" + username + "': " + ex.getMessage(), ex);
                     }

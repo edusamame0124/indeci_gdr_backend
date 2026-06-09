@@ -12,6 +12,13 @@ public interface HrOrgUnitRepository {
 
     Optional<HrOrgUnit> findActiveById(Long id);
 
+    /**
+     * SSO — resuelve la oficina activa por su {@code UNIT_CODE}. Usado al
+     * aprovisionar un {@code HrPerson} desde el claim {@code areas.rendimiento}
+     * del token SISRH (UNIT_CODE == CODIGO_AREA en INDECI_SISTEMA_AREA).
+     */
+    Optional<HrOrgUnit> findActiveByCode(String code);
+
     Page<HrOrgUnit> findPageActiveOrganigrama(Pageable pageable);
 
     /**
