@@ -67,4 +67,46 @@ public interface JpaGdrImprovementOpportunityRepository
               and upper(cycle.status) = 'ACTIVE'
             """)
     Optional<GdrImprovementOpportunity> findActiveById(@Param("opportunityId") Long opportunityId);
+
+    // ── Implementaciones cycle-aware (P2) ─────────────────────────────────────
+
+    @Override
+    @Query("""
+            select opportunity
+            from GdrImprovementOpportunity opportunity
+            join fetch opportunity.improvementStatus status
+            join fetch opportunity.result result
+            join fetch result.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch assignment.evaluatorPerson evaluator
+            where result.assignment.cycle.id = :cycleId
+              and upper(opportunity.recordStatus) = 'ACTIVO'
+              and upper(result.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by opportunity.createdAt desc
+            """)
+    List<GdrImprovementOpportunity> findAllByCycleId(@Param("cycleId") Long cycleId);
+
+    @Override
+    @Query("""
+            select opportunity
+            from GdrImprovementOpportunity opportunity
+            join fetch opportunity.improvementStatus status
+            join fetch opportunity.result result
+            join fetch result.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch assignment.evaluatorPerson evaluator
+            where evaluated.id = :evaluatedId
+              and result.assignment.cycle.id = :cycleId
+              and upper(opportunity.recordStatus) = 'ACTIVO'
+              and upper(result.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by opportunity.createdAt desc
+            """)
+    List<GdrImprovementOpportunity> findActiveByEvaluatedIdAndCycle(
+            @Param("evaluatedId") Long evaluatedId,
+            @Param("cycleId") Long cycleId
+    );
 }

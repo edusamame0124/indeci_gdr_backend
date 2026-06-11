@@ -49,8 +49,8 @@ public class GdrImprovementService {
         this.notificacionesService = notificacionesService;
     }
 
-    public List<OportunidadMejoraResumenResponse> listImprovements(Long evaluatedId) {
-        return improvementOpportunityRepository.findActiveByEvaluatedIdInActiveCycle(evaluatedId).stream()
+    public List<OportunidadMejoraResumenResponse> listImprovements(Long evaluatedId, Long cycleId) {
+        return improvementOpportunityRepository.findActiveByEvaluatedIdAndCycle(evaluatedId, cycleId).stream()
                 .map(this::mapSummary)
                 .toList();
     }
@@ -63,7 +63,8 @@ public class GdrImprovementService {
     @Transactional
     public OportunidadMejoraDetalleResponse createImprovement(
             RegistrarOportunidadMejoraRequest request,
-            String username
+            String username,
+            Long cycleId
     ) {
         String stage = "validar estado inicial";
         if (normalizeStateCode(request.estadoCodigo()) != null && !"OPEN".equalsIgnoreCase(request.estadoCodigo())) {
@@ -72,7 +73,7 @@ public class GdrImprovementService {
 
         try {
             stage = "resolver resultado consolidado";
-            GdrResult result = resultRepository.findByEvaluatedPersonIdInActiveCycle(request.evaluatedId())
+            GdrResult result = resultRepository.findByEvaluatedPersonIdAndCycle(request.evaluatedId(), cycleId)
                     .orElseThrow(() -> new ResourceNotFoundException("No se encontro el resultado consolidado del evaluado."));
 
             stage = "resolver estado OPEN";

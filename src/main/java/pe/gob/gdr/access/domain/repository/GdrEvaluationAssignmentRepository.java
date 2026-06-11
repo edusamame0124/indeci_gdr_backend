@@ -29,5 +29,18 @@ public interface GdrEvaluationAssignmentRepository {
 
     boolean hasActiveGoals(Long assignmentId);
 
+    // ── Métodos cycle-aware (P2) ──────────────────────────────────────────────
+
+    List<GdrEvaluationAssignment> findActiveAssignmentsByCycle(Long cycleId);
+
+    Optional<GdrEvaluationAssignment> findActiveByIdAndCycle(Long assignmentId, Long cycleId);
+
+    List<GdrEvaluationAssignment> findActiveByEvaluatedIdAndCycle(Long evaluatedId, Long cycleId);
+
+    List<GdrEvaluationAssignment> findActiveByPersonIdAndCycle(Long personId, Long cycleId);
+
     GdrEvaluationAssignment save(GdrEvaluationAssignment assignment);
+
+    /** Retorna los nombres de evaluados activos en el ciclo que no tienen evaluación final registrada. */
+    List<String> findNombresSinEvaluacionFinalEnCiclo(Long cycleId);
 }

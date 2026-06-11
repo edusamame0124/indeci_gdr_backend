@@ -97,6 +97,19 @@ public interface JpaUserRepository extends JpaRepository<User, Long>, UserReposi
 
     @Override
     @Query("""
+            select u.username
+            from User u
+            join u.userRoles ur
+            join ur.role r
+            where upper(u.status) = 'ACTIVE'
+              and upper(ur.status) = 'ACTIVE'
+              and upper(r.status) = 'ACTIVE'
+              and upper(r.code) = upper(:roleCode)
+            """)
+    List<String> findActiveUsernamesByRoleCode(@Param("roleCode") String roleCode);
+
+    @Override
+    @Query("""
             select count(u) > 0
             from User u
             where lower(u.username) = lower(:username)

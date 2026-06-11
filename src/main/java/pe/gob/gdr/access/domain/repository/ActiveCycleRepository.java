@@ -11,4 +11,6 @@ public interface ActiveCycleRepository {
     List<ActiveCycle> findAllOrderedForAdministration();
 
     Optional<ActiveCycle> findByIdForAdministration(Long cycleId);
+
+    ActiveCycle save(ActiveCycle cycle);
 }

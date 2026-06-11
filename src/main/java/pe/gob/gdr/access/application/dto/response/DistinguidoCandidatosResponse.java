@@ -7,6 +7,8 @@ public record DistinguidoCandidatosResponse(
         int maxDistinguidosSlots,
         int currentDistinguidosAssigned,
         int remainingDistinguidoSlots,
+        int candidatosConConfirmacionPendiente,
+        boolean bloqueoVal08Activo,
         List<DistinguidoCandidatoFilaResponse> rows
 ) {
 }

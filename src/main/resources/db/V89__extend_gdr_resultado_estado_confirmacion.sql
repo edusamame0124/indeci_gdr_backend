@@ -1,0 +1,41 @@
+﻿-- ============================================================================
+-- V89 - GDR_RESULTADO.ESTADO_CONFIRMACION (P5)
+-- Trazabilidad de confirmacion de calificacion para VAL-08 (RPE 068-2020 Art. 50).
+-- Bloquea Rendimiento distinguido mientras exista solicitud pendiente ante el CIE.
+-- Tablespace: TBS_GDR_DATA (indices).
+-- ============================================================================
+
+ALTER TABLE GDR_RESULTADO ADD (
+  ESTADO_CONFIRMACION VARCHAR2(30) DEFAULT 'SIN_SOLICITUD' NOT NULL
+);
+
+ALTER TABLE GDR_RESULTADO ADD CONSTRAINT CK_GDR_RESULT_ESTADO_CONF CHECK (
+  ESTADO_CONFIRMACION IN ('SIN_SOLICITUD', 'PENDIENTE', 'RESUELTA')
+);
+
+CREATE INDEX IX_GDR_RESULT_ESTADO_CONF ON GDR_RESULTADO (ESTADO_CONFIRMACION)
+  TABLESPACE TBS_GDR_DATA;
+
+-- Backfill desde solicitudes existentes (idempotente tras re-ejecucion parcial)
+UPDATE GDR_RESULTADO r
+   SET ESTADO_CONFIRMACION = 'RESUELTA'
+ WHERE EXISTS (
+       SELECT 1
+         FROM GDR_SOLICITUD_CONFIRMACION s
+         JOIN GDR_EVALUACION_FINAL fe ON fe.ID_FINAL_EVALUATION = s.ID_FINAL_EVALUATION
+        WHERE fe.ID_ASSIGNMENT = r.ID_ASSIGNMENT
+          AND s.ESTADO = 'RESUELTA'
+ );
+
+UPDATE GDR_RESULTADO r
+   SET ESTADO_CONFIRMACION = 'PENDIENTE'
+ WHERE EXISTS (
+       SELECT 1
+         FROM GDR_SOLICITUD_CONFIRMACION s
+         JOIN GDR_EVALUACION_FINAL fe ON fe.ID_FINAL_EVALUATION = s.ID_FINAL_EVALUATION
+        WHERE fe.ID_ASSIGNMENT = r.ID_ASSIGNMENT
+          AND s.ESTADO IN ('PRESENTADA', 'EN_CIE')
+ );
+
+COMMENT ON COLUMN GDR_RESULTADO.ESTADO_CONFIRMACION IS
+  'Trazabilidad VAL-08: SIN_SOLICITUD | PENDIENTE (bloquea distinguido) | RESUELTA (CIE decidio).';

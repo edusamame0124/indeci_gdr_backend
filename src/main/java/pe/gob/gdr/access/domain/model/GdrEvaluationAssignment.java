@@ -58,6 +58,40 @@ public class GdrEvaluationAssignment {
     @Builder.Default
     private String status = "ACTIVE";
 
+    /** V95 — Snapshot de cargo/puesto al inicio del ciclo. POSIBLE_CAMBIO_RRHH_GDR_004. */
+    @Column(name = "CARGO_PUESTO_SNAP", length = 200)
+    private String cargoPuestoSnap;
+
+    @Column(name = "NIVEL_REMUNERATIVO_SNAP", length = 80)
+    private String nivelRemunerativoSnap;
+
+    @Column(name = "UNIDAD_ORGANICA_SNAP", length = 200)
+    private String unidadOrganicaSnap;
+
+    @Column(name = "EVALUADOR_SNAP", length = 150)
+    private String evaluadorSnap;
+
+    @Column(name = "FECHA_CORTE_SNAP")
+    private java.time.LocalDate fechaCorteSnap;
+
+    @Column(name = "FUENTE_DATO_SNAP", length = 50)
+    @Builder.Default
+    private String fuenteDatoSnap = "GDR_HRPERSON";
+
+    @Column(name = "DATO_AJUSTADO_MANUALMENTE", nullable = false, length = 1)
+    @Builder.Default
+    private String datoAjustadoManualmente = "N";
+
+    @Column(name = "MOTIVO_AJUSTE_MANUAL", length = 500)
+    private String motivoAjusteManual;
+
+    @Column(name = "CARGO_PUESTO_ANTERIOR", length = 200)
+    private String cargoPuestoAnterior;
+
+    @Column(name = "AJUSTADO_POR", length = 120)
+    private String ajustadoPor;
+    // P1: fuenteDatoSnap = 'SISRH_API' — integración con legajo SISRH en tiempo real
+
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

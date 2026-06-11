@@ -122,4 +122,83 @@ public interface JpaDocSignedFileRepository extends JpaRepository<DocSignedFile,
               and upper(cycle.status) = 'ACTIVE'
             """)
     Optional<DocSignedFile> findActiveByResultIdAndTypeId(@Param("resultId") Long resultId, @Param("typeId") Long typeId);
+
+    // ── Implementaciones cycle-aware (P2) ─────────────────────────────────────
+
+    @Override
+    @Query("""
+            select document
+            from DocSignedFile document
+            join fetch document.docType type
+            join fetch document.result result
+            join fetch result.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch assignment.evaluatorPerson evaluator
+            where result.assignment.cycle.id = :cycleId
+              and upper(document.status) = 'ACTIVO'
+              and upper(result.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by document.uploadDate desc, document.id desc
+            """)
+    List<DocSignedFile> findAllByCycleId(@Param("cycleId") Long cycleId);
+
+    @Override
+    @Query("""
+            select document
+            from DocSignedFile document
+            join fetch document.docType type
+            join fetch document.result result
+            join fetch result.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch assignment.evaluatorPerson evaluator
+            where evaluated.id = :evaluatedId
+              and result.assignment.cycle.id = :cycleId
+              and upper(document.status) = 'ACTIVO'
+              and upper(result.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by type.name asc, document.uploadDate desc
+            """)
+    List<DocSignedFile> findActiveByEvaluatedIdAndCycle(
+            @Param("evaluatedId") Long evaluatedId,
+            @Param("cycleId") Long cycleId
+    );
+
+    @Override
+    @Query(
+            value = """
+                    select document
+                    from DocSignedFile document
+                    join document.docType type
+                    join document.result result
+                    join result.assignment assignment
+                    join assignment.cycle cycle
+                    join assignment.evaluatedPerson evaluated
+                    where evaluated.id = :evaluatedId
+                      and cycle.id = :cycleId
+                      and upper(document.status) = 'ACTIVO'
+                      and upper(result.status) = 'ACTIVE'
+                      and upper(assignment.status) = 'ACTIVE'
+                    order by type.name asc, document.uploadDate desc, document.id desc
+                    """,
+            countQuery = """
+                    select count(document)
+                    from DocSignedFile document
+                    join document.result result
+                    join result.assignment assignment
+                    join assignment.cycle cycle
+                    join assignment.evaluatedPerson evaluated
+                    where evaluated.id = :evaluatedId
+                      and cycle.id = :cycleId
+                      and upper(document.status) = 'ACTIVO'
+                      and upper(result.status) = 'ACTIVE'
+                      and upper(assignment.status) = 'ACTIVE'
+                    """
+    )
+    Page<DocSignedFile> findPageActiveByEvaluatedIdAndCycle(
+            @Param("evaluatedId") Long evaluatedId,
+            @Param("cycleId") Long cycleId,
+            Pageable pageable
+    );
 }

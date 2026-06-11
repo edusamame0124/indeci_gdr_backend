@@ -16,5 +16,17 @@ public interface GdrEvidenceRepository {
 
     long countActiveByGoalIdInActiveCycle(Long goalId);
 
+    // ── Métodos cycle-aware (P2) ──────────────────────────────────────────────
+
+    List<GdrEvidence> findActiveByCycle(Long cycleId);
+
+    List<GdrEvidence> findActiveByGoalIdAndCycle(Long goalId, Long cycleId);
+
+    Optional<GdrEvidence> findActiveByIdAndCycle(Long evidenceId, Long cycleId);
+
+    List<GdrEvidence> findActiveByAssignmentIdAndCycle(Long assignmentId, Long cycleId);
+
+    long countActiveByGoalIdAndCycle(Long goalId, Long cycleId);
+
     GdrEvidence save(GdrEvidence evidence);
 }

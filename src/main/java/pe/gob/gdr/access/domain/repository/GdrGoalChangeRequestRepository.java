@@ -19,5 +19,11 @@ public interface GdrGoalChangeRequestRepository {
 
     List<GdrGoalChangeRequest> findActiveReceptionItemsInActiveCycle();
 
+    // ── Métodos cycle-aware (P2) ──────────────────────────────────────────────
+
+    Optional<GdrGoalChangeRequest> findActiveByIdAndCycle(Long id, Long cycleId);
+
+    List<GdrGoalChangeRequest> findActiveReceptionItemsByCycle(Long cycleId);
+
     GdrGoalChangeRequest save(GdrGoalChangeRequest request);
 }

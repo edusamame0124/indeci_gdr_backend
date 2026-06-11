@@ -15,9 +15,12 @@ public class FormatoGdrPdfProperties {
      */
     private String entityName = "Entidad publica";
 
-    private String formVersion = "v01";
+    private String formVersion = "2025";
 
-    private String formRevision = "Rev: nov-2025";
+    private String formRevision = "RPE 000041-2025/PE";
+
+    /** Referencia normativa persistida en DOC_VERSION al registrar documentos GDR. */
+    private String normativeReference = "RPE N.° 000041-2025/PE";
 
     private String servirFooterNote =
             "AUTORIDAD NACIONAL DEL SERVICIO CIVIL - SERVIR";
@@ -81,6 +84,14 @@ public class FormatoGdrPdfProperties {
 
     public void setFormRevision(String formRevision) {
         this.formRevision = formRevision;
+    }
+
+    public String getNormativeReference() {
+        return normativeReference;
+    }
+
+    public void setNormativeReference(String normativeReference) {
+        this.normativeReference = normativeReference;
     }
 
     public String getServirFooterNote() {

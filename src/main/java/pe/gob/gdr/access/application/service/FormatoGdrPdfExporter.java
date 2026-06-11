@@ -14,6 +14,7 @@ import com.lowagie.text.pdf.PdfWriter;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -26,13 +27,17 @@ import pe.gob.gdr.access.domain.exception.DomainException;
 import pe.gob.gdr.access.domain.model.ActiveCycle;
 import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
 import pe.gob.gdr.access.domain.model.GdrEvidence;
+import pe.gob.gdr.access.domain.model.GdrFinalEvaluation;
 import pe.gob.gdr.access.domain.model.GdrGoal;
 import pe.gob.gdr.access.domain.model.GdrImprovementOpportunity;
 import pe.gob.gdr.access.domain.model.GdrResult;
+import pe.gob.gdr.access.domain.model.GdrSeguimiento;
 import pe.gob.gdr.access.domain.model.HrPerson;
 import pe.gob.gdr.access.domain.repository.GdrEvidenceRepository;
+import pe.gob.gdr.access.domain.repository.GdrFinalEvaluationRepository;
 import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 import pe.gob.gdr.access.domain.repository.GdrImprovementOpportunityRepository;
+import pe.gob.gdr.access.domain.repository.GdrSeguimientoRepository;
 import pe.gob.gdr.access.infrastructure.config.FormatoGdrPdfProperties;
 
 @Service
@@ -53,17 +58,23 @@ public class FormatoGdrPdfExporter {
     private final GdrGoalRepository goalRepository;
     private final GdrEvidenceRepository evidenceRepository;
     private final GdrImprovementOpportunityRepository improvementRepository;
+    private final GdrFinalEvaluationRepository finalEvaluationRepository;
+    private final GdrSeguimientoRepository seguimientoRepository;
 
     public FormatoGdrPdfExporter(
             FormatoGdrPdfProperties properties,
             GdrGoalRepository goalRepository,
             GdrEvidenceRepository evidenceRepository,
-            GdrImprovementOpportunityRepository improvementRepository
+            GdrImprovementOpportunityRepository improvementRepository,
+            GdrFinalEvaluationRepository finalEvaluationRepository,
+            GdrSeguimientoRepository seguimientoRepository
     ) {
         this.properties = properties;
         this.goalRepository = goalRepository;
         this.evidenceRepository = evidenceRepository;
         this.improvementRepository = improvementRepository;
+        this.finalEvaluationRepository = finalEvaluationRepository;
+        this.seguimientoRepository = seguimientoRepository;
     }
 
     public byte[] exportPdf(FormatoGdrPdfExportContext ctx) {
@@ -185,8 +196,12 @@ public class FormatoGdrPdfExporter {
 
     private PdfPCell buildRightMetadataCell() {
         String body = formatServirHeaderLines(properties.getServirFooterNote());
-        String block =
-                properties.getFormVersion() + "\n" + properties.getFormRevision() + (body.isBlank() ? "" : "\n" + body);
+        String normativa = nullToEmpty(properties.getNormativeReference()).trim();
+        String block = properties.getFormVersion()
+                + "\n"
+                + properties.getFormRevision()
+                + (normativa.isBlank() ? "" : "\n" + normativa)
+                + (body.isBlank() ? "" : "\n" + body);
         Phrase phrase = new Phrase(block, smallFont(5f));
         PdfPCell cell = new PdfPCell(phrase);
         cell.setHorizontalAlignment(Element.ALIGN_CENTER);
@@ -270,8 +285,10 @@ public class FormatoGdrPdfExporter {
         table.addCell(personTwoCol("DNI:", nullToEmpty(evaluator.getDocumentNumber())));
         table.addCell(personTwoCol("APELLIDOS Y NOMBRES:", nullToUpper(evaluated.getDisplayName())));
         table.addCell(personTwoCol("APELLIDOS Y NOMBRES:", nullToUpper(evaluator.getDisplayName())));
-        table.addCell(personTwoCol("PUESTO:", "—"));
-        table.addCell(personTwoCol("PUESTO:", "—"));
+        table.addCell(personTwoCol("PUESTO:", resolvePersonCargo(evaluated)));
+        table.addCell(personTwoCol("PUESTO:", resolvePersonCargo(evaluator)));
+        table.addCell(personTwoCol("NIVEL REMUNERATIVO:", resolveNivelRemunerativo(evaluated)));
+        table.addCell(personTwoCol("NIVEL REMUNERATIVO:", resolveNivelRemunerativo(evaluator)));
         table.addCell(personTwoCol("SEGMENTO:", segmentEvaluated));
         table.addCell(personTwoCol("SEGMENTO:", segmentEvaluator));
         table.addCell(personTwoCol(
@@ -322,12 +339,14 @@ public class FormatoGdrPdfExporter {
         } catch (DocumentException ignored) {
             //
         }
+        String fechaFijacionMetas = resolveFechaFijacionMetasLiteral(assignment);
+        String asistioFijacion = tieneReunionSeguimiento(assignment.getId()) ? "Si" : "—";
         stages.addCell(stageCell(
                 "ETAPA DE PLANIFICACION",
                 HEADER_TEAL,
-                "¿El servidor asistio a la reunion de fijacion de metas?\n[dd/mmm/aaaa]",
-                "—",
-                "Fecha de la fijacion de metas\n" + formatCycleRange(cycle.getStartDate(), cycle.getEndDate())
+                "¿El servidor asistio a la reunion de fijacion de metas?\n" + fechaFijacionMetas,
+                asistioFijacion,
+                "Fecha de la fijacion de metas\n" + fechaFijacionMetas
         ));
         stages.addCell(stageCell(
                 "ETAPA DE SEGUIMIENTO",
@@ -518,8 +537,9 @@ public class FormatoGdrPdfExporter {
         String improvementText = buildImprovementNarrative(assignment.getEvaluatedPerson().getId());
         grid.addCell(dataCell(improvementText));
 
+        // P3 — Formato 2025 (RPE 000041-2025/PE): fecha real de la reunión si está registrada
         PdfPCell dateRow = new PdfPCell(new Phrase(
-                "FECHA DE REUNION DE RETROALIMENTACION FINAL: [dd/mmm/aaaa]",
+                "FECHA DE REUNION DE RETROALIMENTACION FINAL: " + resolveRetroFinalDateLiteral(assignment),
                 smallFont(7.5f)
         ));
         dateRow.setColspan(4);
@@ -530,6 +550,43 @@ public class FormatoGdrPdfExporter {
         wrap.setPadding(0);
         outer.addCell(wrap);
         return outer;
+    }
+
+    private String resolveRetroFinalDateLiteral(GdrEvaluationAssignment assignment) {
+        return finalEvaluationRepository.findByAssignmentIdInActiveCycle(assignment.getId())
+                .map(GdrFinalEvaluation::getFechaReunionRetroFinal)
+                .map(SHORT_DATE::format)
+                .orElse("[dd/mmm/aaaa]");
+    }
+
+    private String resolvePersonCargo(HrPerson person) {
+        String cargo = person.getCargo();
+        return cargo == null || cargo.isBlank() ? "—" : cargo.trim();
+    }
+
+    private String resolveNivelRemunerativo(HrPerson person) {
+        String nivel = person.getNivelRemunerativo();
+        return nivel == null || nivel.isBlank() ? "—" : nivel.trim();
+    }
+
+    private boolean tieneReunionSeguimiento(Long assignmentId) {
+        return !seguimientoRepository.findByAssignmentIdOrderByFechaReunion(assignmentId).isEmpty();
+    }
+
+    private String resolveFechaFijacionMetasLiteral(GdrEvaluationAssignment assignment) {
+        List<GdrSeguimiento> reuniones =
+                seguimientoRepository.findByAssignmentIdOrderByFechaReunion(assignment.getId());
+        if (!reuniones.isEmpty()) {
+            LocalDate fecha = reuniones.get(0).getFechaReunion();
+            if (fecha != null) {
+                return CYCLE_DAY_FORMAT.format(fecha);
+            }
+        }
+        ActiveCycle cycle = assignment.getCycle();
+        if (cycle != null && cycle.getStartDate() != null) {
+            return CYCLE_DAY_FORMAT.format(cycle.getStartDate());
+        }
+        return "[dd/mmm/aaaa]";
     }
 
     private String distinguishedLiteral(String qualitativeCode) {

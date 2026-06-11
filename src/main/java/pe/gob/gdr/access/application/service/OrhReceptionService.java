@@ -34,15 +34,15 @@ public class OrhReceptionService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrhGoalChangeRequestItemResponse> listChangeRequests() {
-        return goalChangeRequestRepository.findActiveReceptionItemsInActiveCycle().stream()
+    public List<OrhGoalChangeRequestItemResponse> listChangeRequests(Long cycleId) {
+        return goalChangeRequestRepository.findActiveReceptionItemsByCycle(cycleId).stream()
                 .map(this::mapChangeRequest)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<OrhGoalSubmissionItemResponse> listSubmissions() {
-        return goalOrhSubmissionRepository.findActiveReceptionItemsInActiveCycle().stream()
+    public List<OrhGoalSubmissionItemResponse> listSubmissions(Long cycleId) {
+        return goalOrhSubmissionRepository.findActiveReceptionItemsByCycle(cycleId).stream()
                 .map(this::mapSubmission)
                 .toList();
     }
@@ -51,10 +51,11 @@ public class OrhReceptionService {
     public OrhGoalChangeRequestItemResponse reviewChangeRequest(
             Long id,
             ReviewOrhReceptionRequest request,
-            String username
+            String username,
+            Long cycleId
     ) {
         User reviewer = gdrAccessPolicyService.loadUserWithContext(username);
-        GdrGoalChangeRequest changeRequest = goalChangeRequestRepository.findActiveByIdInActiveCycle(id)
+        GdrGoalChangeRequest changeRequest = goalChangeRequestRepository.findActiveByIdAndCycle(id, cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontro la solicitud de modificacion."));
 
         if (changeRequest.getStatus() != GoalChangeRequestStatus.PENDIENTE) {
@@ -75,10 +76,11 @@ public class OrhReceptionService {
     public OrhGoalSubmissionItemResponse reviewSubmission(
             Long id,
             ReviewOrhReceptionRequest request,
-            String username
+            String username,
+            Long cycleId
     ) {
         User reviewer = gdrAccessPolicyService.loadUserWithContext(username);
-        GdrGoalOrhSubmission submission = goalOrhSubmissionRepository.findActiveByIdInActiveCycle(id)
+        GdrGoalOrhSubmission submission = goalOrhSubmissionRepository.findActiveByIdAndCycle(id, cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontro el envio a ORH."));
 
         if (submission.getStatus() != GoalOrhSubmissionStatus.ENVIADO) {

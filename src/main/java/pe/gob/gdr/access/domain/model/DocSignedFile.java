@@ -71,6 +71,27 @@ public class DocSignedFile {
     @Column(name = "FECHA_CARGA", nullable = false)
     private LocalDateTime uploadDate;
 
+    /** V94 — Trazabilidad de firma. POSIBLE_CAMBIO_RRHH_GDR_003. */
+    @Column(name = "TIPO_FIRMA", nullable = false, length = 30)
+    @Builder.Default
+    private String tipoFirma = "PENDIENTE";
+
+    @Column(name = "ESTADO_FIRMA", nullable = false, length = 30)
+    @Builder.Default
+    private String estadoFirma = "PENDIENTE";
+
+    @Column(name = "HASH_DOCUMENTO", length = 64)
+    private String hashDocumento;
+
+    @Column(name = "IP_FIRMANTE", length = 45)
+    private String ipFirmante;
+
+    @Column(name = "ID_SESION_FIRMA", length = 128)
+    private String idSesionFirma;
+    // P1: String constanciaFirmaDigital — número de constancia PKI/FirmaPeru
+    // P1: String dniTitularCertificado  — DNI del firmante certificado
+    // P1: String entidadCertificadora   — nombre de la CA
+
     @Column(name = "FECHA_CREACION", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

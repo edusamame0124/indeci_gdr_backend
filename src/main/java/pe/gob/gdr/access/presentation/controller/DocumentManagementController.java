@@ -80,13 +80,14 @@ public class DocumentManagementController {
     @PreAuthorize("@gdrAccessPolicyService.canAccessDocumentsForEvaluated(authentication, #evaluatedId)")
     public ResponseEntity<ApiResponse<PageResponse<DocumentoFirmadoResumenResponse>>> listSignedDocuments(
             @RequestParam("evaluatedId") Long evaluatedId,
+            @RequestParam("cycleId") Long cycleId,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size
     ) {
         int safeSize = Math.min(Math.max(size, 1), SIGNED_DOCUMENTS_MAX_PAGE_SIZE);
         int safePage = Math.max(page, 0);
         Pageable pageable = PageRequest.of(safePage, safeSize);
-        Page<DocumentoFirmadoResumenResponse> result = documentManagementService.listSignedDocuments(evaluatedId, pageable);
+        Page<DocumentoFirmadoResumenResponse> result = documentManagementService.listSignedDocuments(evaluatedId, cycleId, pageable);
         return ResponseEntity.ok(ApiResponse.ok(
                 PageResponse.from(result),
                 "Documentos firmados consultados correctamente."
@@ -104,8 +105,11 @@ public class DocumentManagementController {
 
     @GetMapping("/formato-gdr/pdf")
     @PreAuthorize("@gdrAccessPolicyService.canPrepareDocumentsForEvaluated(authentication, #evaluatedId)")
-    public ResponseEntity<?> downloadFormatoGdrPdf(@RequestParam("evaluatedId") Long evaluatedId) {
-        return documentManagementService.downloadFormatoGdrPdf(evaluatedId);
+    public ResponseEntity<?> downloadFormatoGdrPdf(
+            @RequestParam("evaluatedId") Long evaluatedId,
+            @RequestParam("cycleId") Long cycleId
+    ) {
+        return documentManagementService.downloadFormatoGdrPdf(evaluatedId, cycleId);
     }
 
     @PostMapping("/firmas/preparar")

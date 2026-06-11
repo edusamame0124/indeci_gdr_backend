@@ -2,15 +2,18 @@ package pe.gob.gdr.access.application.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.gob.gdr.access.application.dto.request.GuardarEvaluacionFinalRequest;
+import pe.gob.gdr.access.application.dto.request.RegistrarRetroFinalRequest;
 import pe.gob.gdr.access.application.dto.response.ActiveCycleContextResponse;
 import pe.gob.gdr.access.application.dto.response.DetalleEvaluacionFinalResponse;
 import pe.gob.gdr.access.application.dto.response.DetallePuntajeResponse;
@@ -30,6 +33,7 @@ import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvidenceRepository;
 import pe.gob.gdr.access.domain.repository.GdrFinalEvaluationRepository;
 import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
+import pe.gob.gdr.access.domain.repository.GdrPublicHolidayRepository;
 import pe.gob.gdr.access.domain.repository.GdrScoreDetailRepository;
 
 @Service
@@ -45,6 +49,8 @@ public class GdrFinalEvaluationService {
     private final GdrScoreDetailRepository scoreDetailRepository;
     private final GdrResultService resultService;
     private final GdrAccessPolicyService accessPolicyService;
+    private final GdrPublicHolidayRepository publicHolidayRepository;
+    private final GdrValidacionNormativaService validacionNormativaService;
 
     public GdrFinalEvaluationService(
             GdrEvaluationAssignmentRepository assignmentRepository,
@@ -53,7 +59,9 @@ public class GdrFinalEvaluationService {
             GdrFinalEvaluationRepository finalEvaluationRepository,
             GdrScoreDetailRepository scoreDetailRepository,
             GdrResultService resultService,
-            GdrAccessPolicyService accessPolicyService
+            GdrAccessPolicyService accessPolicyService,
+            GdrPublicHolidayRepository publicHolidayRepository,
+            GdrValidacionNormativaService validacionNormativaService
     ) {
         this.assignmentRepository = assignmentRepository;
         this.goalRepository = goalRepository;
@@ -62,14 +70,12 @@ public class GdrFinalEvaluationService {
         this.scoreDetailRepository = scoreDetailRepository;
         this.resultService = resultService;
         this.accessPolicyService = accessPolicyService;
+        this.publicHolidayRepository = publicHolidayRepository;
+        this.validacionNormativaService = validacionNormativaService;
     }
 
-    public List<ResumenEvaluacionFinalResponse> listFinalEvaluations() {
-        return listFinalEvaluations(null);
-    }
-
-    public List<ResumenEvaluacionFinalResponse> listFinalEvaluations(String username) {
-        Map<Long, GdrFinalEvaluation> evaluationsByAssignment = finalEvaluationRepository.findActiveFinalEvaluationsForActiveCycle()
+    public List<ResumenEvaluacionFinalResponse> listFinalEvaluations(String username, Long cycleId) {
+        Map<Long, GdrFinalEvaluation> evaluationsByAssignment = finalEvaluationRepository.findActiveFinalEvaluationsByCycle(cycleId)
                 .stream()
                 .collect(Collectors.toMap(
                         evaluation -> evaluation.getAssignment().getId(),
@@ -78,7 +84,7 @@ public class GdrFinalEvaluationService {
                         LinkedHashMap::new
                 ));
 
-        List<GdrEvaluationAssignment> assignments = resolveAccessibleAssignments(username);
+        List<GdrEvaluationAssignment> assignments = resolveAccessibleAssignments(username, cycleId);
         ensureUniqueEvaluatedAssignments(assignments);
 
         return assignments.stream()
@@ -86,24 +92,20 @@ public class GdrFinalEvaluationService {
                 .toList();
     }
 
-    public DetalleEvaluacionFinalResponse getFinalEvaluation(Long evaluatedId) {
-        return getFinalEvaluation(null, evaluatedId);
-    }
-
-    public DetalleEvaluacionFinalResponse getFinalEvaluation(String username, Long evaluatedId) {
+    public DetalleEvaluacionFinalResponse getFinalEvaluation(String username, Long evaluatedId, Long cycleId) {
         if (username != null) {
-            validateEvaluatedScope(username, evaluatedId);
+            validateEvaluatedScope(username, evaluatedId, cycleId);
         }
-        GdrEvaluationAssignment assignment = resolveUniqueAssignmentByEvaluatedId(evaluatedId);
-        Optional<GdrFinalEvaluation> evaluation = finalEvaluationRepository.findByAssignmentIdInActiveCycle(assignment.getId());
-        List<GdrGoal> goals = goalRepository.findActiveGoalsByAssignmentIdInActiveCycle(assignment.getId());
+        GdrEvaluationAssignment assignment = resolveUniqueAssignmentByEvaluatedId(evaluatedId, cycleId);
+        Optional<GdrFinalEvaluation> evaluation = finalEvaluationRepository.findByAssignmentIdAndCycle(assignment.getId(), cycleId);
+        List<GdrGoal> goals = goalRepository.findActiveGoalsByAssignmentIdAndCycle(assignment.getId(), cycleId);
 
         if (evaluation.isPresent()) {
             List<GdrScoreDetail> details = scoreDetailRepository.findByFinalEvaluationId(evaluation.get().getId());
             return mapDetail(assignment, evaluation.get(), details);
         }
 
-            List<DetallePuntajeResponse> detailResponses = goals.stream()
+        List<DetallePuntajeResponse> detailResponses = goals.stream()
                 .map((goal) -> new DetallePuntajeResponse(
                         goal.getId(),
                         goal.getTitle(),
@@ -131,14 +133,17 @@ public class GdrFinalEvaluationService {
                 pendingSegment != null ? pendingSegment.getName() : null,
                 "PENDIENTE",
                 null,
+                null,
+                null,
+                null,
                 detailResponses
         );
     }
 
     @Transactional
-    public DetalleEvaluacionFinalResponse createFinalEvaluation(GuardarEvaluacionFinalRequest request) {
-        GdrEvaluationAssignment assignment = resolveAssignment(request.assignmentId());
-        if (finalEvaluationRepository.findByAssignmentIdInActiveCycle(assignment.getId()).isPresent()) {
+    public DetalleEvaluacionFinalResponse createFinalEvaluation(GuardarEvaluacionFinalRequest request, Long cycleId) {
+        GdrEvaluationAssignment assignment = resolveAssignment(request.assignmentId(), cycleId);
+        if (finalEvaluationRepository.findByAssignmentIdAndCycle(assignment.getId(), cycleId).isPresent()) {
             throw new DomainException("Ya existe una evaluacion final registrada para la asignacion.");
         }
 
@@ -146,27 +151,51 @@ public class GdrFinalEvaluationService {
                 .assignment(assignment)
                 .status("ACTIVE")
                 .build();
-        return saveEvaluation(evaluation, request);
+        return saveEvaluation(evaluation, request, cycleId);
     }
 
     @Transactional
-    public DetalleEvaluacionFinalResponse updateFinalEvaluation(Long evaluationId, GuardarEvaluacionFinalRequest request) {
-        GdrFinalEvaluation evaluation = finalEvaluationRepository.findByIdInActiveCycle(evaluationId)
+    public DetalleEvaluacionFinalResponse updateFinalEvaluation(Long evaluationId, GuardarEvaluacionFinalRequest request, Long cycleId) {
+        GdrFinalEvaluation evaluation = finalEvaluationRepository.findByIdAndCycle(evaluationId, cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontro la evaluacion final solicitada."));
         if (!evaluation.getAssignment().getId().equals(request.assignmentId())) {
             throw new DomainException("La asignacion de la evaluacion no coincide con la solicitud.");
         }
-        return saveEvaluation(evaluation, request);
+        return saveEvaluation(evaluation, request, cycleId);
     }
 
-    private DetalleEvaluacionFinalResponse saveEvaluation(GdrFinalEvaluation evaluation, GuardarEvaluacionFinalRequest request) {
-        GdrEvaluationAssignment assignment = resolveAssignment(request.assignmentId());
-        List<GdrGoal> goals = goalRepository.findActiveGoalsByAssignmentIdInActiveCycle(assignment.getId());
+    @Transactional
+    public DetalleEvaluacionFinalResponse registrarRetroalimentacionFinal(
+            Long evaluationId,
+            RegistrarRetroFinalRequest request,
+            Long cycleId
+    ) {
+        GdrFinalEvaluation evaluation = finalEvaluationRepository.findByIdAndCycle(evaluationId, cycleId)
+                .orElseThrow(() -> new ResourceNotFoundException("No se encontro la evaluacion final solicitada."));
+
+        LocalDate fechaReunion = request.fechaReunionRetroFinal();
+        validacionNormativaService.validarFechaReunionRetroFinal(fechaReunion);
+
+        Set<LocalDate> feriados = publicHolidayRepository.findHolidayDatesBetween(
+                fechaReunion, fechaReunion.plusMonths(2));
+        LocalDate plazo = validacionNormativaService.calcularPlazoSolicitudConfirmacion(fechaReunion, feriados);
+
+        evaluation.setFechaReunionRetroFinal(fechaReunion);
+        evaluation.setPlazoSolicitudConfirmacion(plazo);
+        GdrFinalEvaluation saved = finalEvaluationRepository.save(evaluation);
+
+        List<GdrScoreDetail> details = scoreDetailRepository.findByFinalEvaluationId(saved.getId());
+        return mapDetail(saved.getAssignment(), saved, details);
+    }
+
+    private DetalleEvaluacionFinalResponse saveEvaluation(GdrFinalEvaluation evaluation, GuardarEvaluacionFinalRequest request, Long cycleId) {
+        GdrEvaluationAssignment assignment = resolveAssignment(request.assignmentId(), cycleId);
+        List<GdrGoal> goals = goalRepository.findActiveGoalsByAssignmentIdAndCycle(assignment.getId(), cycleId);
         if (goals.isEmpty()) {
             throw new DomainException("La asignacion no tiene metas activas para evaluar.");
         }
 
-        List<GdrEvidence> evidences = evidenceRepository.findActiveByGoalAssignmentIdInActiveCycle(assignment.getId());
+        List<GdrEvidence> evidences = evidenceRepository.findActiveByAssignmentIdAndCycle(assignment.getId(), cycleId);
         if (evidences.isEmpty()) {
             throw new DomainException("La evaluacion final requiere evidencias registradas para la asignacion.");
         }
@@ -246,13 +275,13 @@ public class GdrFinalEvaluationService {
                 LOT3_SCORE_ROUNDING);
     }
 
-    private GdrEvaluationAssignment resolveAssignment(Long assignmentId) {
-        return assignmentRepository.findActiveByIdInActiveCycle(assignmentId)
+    private GdrEvaluationAssignment resolveAssignment(Long assignmentId, Long cycleId) {
+        return assignmentRepository.findActiveByIdAndCycle(assignmentId, cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontro una asignacion activa para la evaluacion."));
     }
 
-    private GdrEvaluationAssignment resolveUniqueAssignmentByEvaluatedId(Long evaluatedId) {
-        List<GdrEvaluationAssignment> assignments = assignmentRepository.findActiveByEvaluatedIdInActiveCycle(evaluatedId);
+    private GdrEvaluationAssignment resolveUniqueAssignmentByEvaluatedId(Long evaluatedId, Long cycleId) {
+        List<GdrEvaluationAssignment> assignments = assignmentRepository.findActiveByEvaluatedIdAndCycle(evaluatedId, cycleId);
         if (assignments.isEmpty()) {
             throw new ResourceNotFoundException("No se encontro una asignacion activa para el evaluado.");
         }
@@ -317,8 +346,24 @@ public class GdrFinalEvaluationService {
                 segment != null ? segment.getName() : null,
                 evaluation.getStatus(),
                 evaluation.getEvaluationComment(),
+                evaluation.getFechaReunionRetroFinal(),
+                evaluation.getPlazoSolicitudConfirmacion(),
+                resolveDiasHabilesRestantesConfirmacion(evaluation),
                 detailResponses
         );
+    }
+
+    /** Días hábiles restantes para solicitar confirmación; null si no hay plazo activo. */
+    private Integer resolveDiasHabilesRestantesConfirmacion(GdrFinalEvaluation evaluation) {
+        LocalDate plazo = evaluation.getPlazoSolicitudConfirmacion();
+        if (plazo == null) {
+            return null;
+        }
+        LocalDate hoy = LocalDate.now();
+        Set<LocalDate> feriados = hoy.isAfter(plazo)
+                ? Set.of()
+                : publicHolidayRepository.findHolidayDatesBetween(hoy, plazo);
+        return validacionNormativaService.contarDiasHabilesRestantes(hoy, plazo, feriados);
     }
 
     private String normalizeOptional(String value) {
@@ -349,24 +394,24 @@ public class GdrFinalEvaluationService {
         }
     }
 
-    private List<GdrEvaluationAssignment> resolveAccessibleAssignments(String username) {
+    private List<GdrEvaluationAssignment> resolveAccessibleAssignments(String username, Long cycleId) {
         if (username == null || username.isBlank()) {
-            return assignmentRepository.findActiveAssignmentsForActiveCycle();
+            return assignmentRepository.findActiveAssignmentsByCycle(cycleId);
         }
 
         User user = accessPolicyService.loadUserWithContext(username);
         ActiveCycleContextResponse context = accessPolicyService.resolveContext(user);
 
         if (accessPolicyService.isAdminSistema(user) || accessPolicyService.isOrh(user)) {
-            return assignmentRepository.findActiveAssignmentsForActiveCycle();
+            return assignmentRepository.findActiveAssignmentsByCycle(cycleId);
         }
 
-        if (!context.hrPersonLinked() || !context.cycleActive() || context.personId() == null) {
+        if (!context.hrPersonLinked() || context.personId() == null) {
             return List.of();
         }
 
         Long personId = context.personId();
-        List<GdrEvaluationAssignment> assignments = assignmentRepository.findActiveByPersonIdInActiveCycle(personId);
+        List<GdrEvaluationAssignment> assignments = assignmentRepository.findActiveByPersonIdAndCycle(personId, cycleId);
         return assignments.stream()
                 .filter(assignment -> canViewAssignmentForActor(context.functionalActor(), personId, assignment))
                 .collect(Collectors.toMap(
@@ -380,12 +425,12 @@ public class GdrFinalEvaluationService {
                 .toList();
     }
 
-    private void validateEvaluatedScope(String username, Long evaluatedId) {
+    private void validateEvaluatedScope(String username, Long evaluatedId, Long cycleId) {
         User user = accessPolicyService.loadUserWithContext(username);
         ActiveCycleContextResponse context = accessPolicyService.resolveContext(user);
         if (!accessPolicyService.isAdminSistema(user)
                 && !accessPolicyService.isOrh(user)
-                && !isEvaluatedAllowedForContext(context, evaluatedId, user)) {
+                && !isEvaluatedAllowedForContext(context, evaluatedId, cycleId, user)) {
             throw new DomainException("No tiene acceso al evaluado solicitado dentro de su alcance operativo.");
         }
     }
@@ -393,9 +438,10 @@ public class GdrFinalEvaluationService {
     private boolean isEvaluatedAllowedForContext(
             ActiveCycleContextResponse context,
             Long evaluatedId,
+            Long cycleId,
             User user
     ) {
-        if (!context.hrPersonLinked() || !context.cycleActive() || context.personId() == null) {
+        if (!context.hrPersonLinked() || context.personId() == null) {
             return false;
         }
         if (accessPolicyService.isOrh(user)) {
@@ -404,14 +450,14 @@ public class GdrFinalEvaluationService {
         Long personId = context.personId();
         return switch (context.functionalActor()) {
             case GdrAccessPolicyService.ACTOR_EVALUADOR ->
-                    assignmentRepository.findActiveByPersonIdInActiveCycle(personId).stream()
+                    assignmentRepository.findActiveByPersonIdAndCycle(personId, cycleId).stream()
                             .anyMatch(assignment ->
                                     Objects.equals(assignment.getEvaluatorPerson().getId(), personId)
                                             && Objects.equals(assignment.getEvaluatedPerson().getId(), evaluatedId));
             case GdrAccessPolicyService.ACTOR_EVALUADO -> Objects.equals(personId, evaluatedId);
             case GdrAccessPolicyService.ACTOR_EVALUADOR_Y_EVALUADO ->
                     Objects.equals(personId, evaluatedId)
-                            || assignmentRepository.findActiveByPersonIdInActiveCycle(personId).stream()
+                            || assignmentRepository.findActiveByPersonIdAndCycle(personId, cycleId).stream()
                             .anyMatch(assignment ->
                                     Objects.equals(assignment.getEvaluatorPerson().getId(), personId)
                                             && Objects.equals(assignment.getEvaluatedPerson().getId(), evaluatedId));

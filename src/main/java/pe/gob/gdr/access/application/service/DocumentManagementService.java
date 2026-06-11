@@ -62,6 +62,7 @@ import pe.gob.gdr.access.domain.repository.DocVersionRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.GdrResultRepository;
 import pe.gob.gdr.access.infrastructure.config.DocumentStorageProperties;
+import pe.gob.gdr.access.infrastructure.config.FormatoGdrPdfProperties;
 
 @Service
 public class DocumentManagementService {
@@ -80,6 +81,7 @@ public class DocumentManagementService {
     private static final String ACTIVE_FLOW_INDICATOR = "S";
     private static final String CLOSED_FLOW_INDICATOR = "N";
     private static final String DOC_TYPE_CODE_CONTINGENCY_OTROS = "OTROS";
+    private static final String DOC_TYPE_CODE_ACTA_REUNION = "ACTA_REUNION";
     private static final int PDF_FONT_SIZE = 12;
     private static final int PDF_TOP_Y = 760;
     private static final int PDF_LEFT_X = 48;
@@ -111,6 +113,7 @@ public class DocumentManagementService {
     private final DocumentStorageProperties storageProperties;
     private final NotificacionesService notificacionesService;
     private final FormatoGdrPdfExporter formatoGdrPdfExporter;
+    private final FormatoGdrPdfProperties formatoGdrPdfProperties;
 
     public DocumentManagementService(
             DocTypeRepository docTypeRepository,
@@ -126,7 +129,8 @@ public class DocumentManagementService {
             DocumentStoragePort documentStoragePort,
             DocumentStorageProperties storageProperties,
             NotificacionesService notificacionesService,
-            FormatoGdrPdfExporter formatoGdrPdfExporter
+            FormatoGdrPdfExporter formatoGdrPdfExporter,
+            FormatoGdrPdfProperties formatoGdrPdfProperties
     ) {
         this.docTypeRepository = docTypeRepository;
         this.docTemplateRepository = docTemplateRepository;
@@ -142,6 +146,7 @@ public class DocumentManagementService {
         this.storageProperties = storageProperties;
         this.notificacionesService = notificacionesService;
         this.formatoGdrPdfExporter = formatoGdrPdfExporter;
+        this.formatoGdrPdfProperties = formatoGdrPdfProperties;
     }
 
     public List<TipoDocumentoResponse> listDocumentTypes() {
@@ -156,8 +161,8 @@ public class DocumentManagementService {
                 .toList();
     }
 
-    public Page<DocumentoFirmadoResumenResponse> listSignedDocuments(Long evaluatedId, Pageable pageable) {
-        return docSignedFileRepository.findPageActiveByEvaluatedIdInActiveCycle(evaluatedId, pageable)
+    public Page<DocumentoFirmadoResumenResponse> listSignedDocuments(Long evaluatedId, Long cycleId, Pageable pageable) {
+        return docSignedFileRepository.findPageActiveByEvaluatedIdAndCycle(evaluatedId, cycleId, pageable)
                 .map(this::mapSummaryResponse);
     }
 
@@ -188,14 +193,60 @@ public class DocumentManagementService {
         return buildFileResponse(resource, request.getPreparedMimeType(), request.getPreparedOriginalName(), download);
     }
 
-    public ResponseEntity<Resource> downloadFormatoGdrPdf(Long evaluatedId) {
-        GdrEvaluationAssignment assignment = resolveActiveAssignmentForFormatoGdr(evaluatedId);
-        Optional<GdrResult> consolidated = resultRepository.findByEvaluatedPersonIdInActiveCycle(evaluatedId);
+    public ResponseEntity<Resource> downloadFormatoGdrPdf(Long evaluatedId, Long cycleId) {
+        GdrEvaluationAssignment assignment = resolveActiveAssignmentForFormatoGdr(evaluatedId, cycleId);
+        Optional<GdrResult> consolidated = resultRepository.findByEvaluatedPersonIdAndCycle(evaluatedId, cycleId);
         FormatoGdrPdfExportContext ctx = new FormatoGdrPdfExportContext(assignment, consolidated);
         byte[] bytes = formatoGdrPdfExporter.exportPdf(ctx);
         String filename = sanitizeOriginalName(buildFormatoGdrPdfFileName(evaluatedId));
         Resource resource = new ByteArrayResource(bytes);
         return buildFileResponse(resource, MediaType.APPLICATION_PDF_VALUE, filename, true);
+    }
+
+    /**
+     * P6-03/P6-04 — Registra un acta generada por el sistema y devuelve el ID del documento firmado.
+     */
+    @Transactional
+    public Long persistGeneratedActaDocument(
+            GdrResult result,
+            String docTypeCode,
+            byte[] content,
+            String originalName,
+            String refNormativa,
+            String username
+    ) {
+        DocType docType = docTypeRepository.findActiveByCode(docTypeCode)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No se encontro el tipo documental " + docTypeCode + ". Verifique el catalogo DOC_TIPO_DOCUMENTO."));
+        DocSignedFile signedFile = persistSignedDocument(
+                result,
+                docType,
+                content,
+                sanitizeOriginalName(originalName),
+                MediaType.APPLICATION_PDF_VALUE,
+                username,
+                null,
+                refNormativa
+        );
+        return signedFile.getId();
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> downloadStoredPdf(Long documentId, String fallbackName) {
+        DocSignedFile document = docSignedFileRepository.findActiveById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("No se encontro el documento solicitado."));
+        Resource resource = documentStoragePort.loadAsResource(document.getFileKey());
+        String filename = sanitizeOriginalName(
+                document.getOriginalName() != null && !document.getOriginalName().isBlank()
+                        ? document.getOriginalName()
+                        : fallbackName
+        );
+        return buildFileResponse(resource, document.getMimeType(), filename, true);
+    }
+
+    public String resolveNormativeReferenceForFormatoGdr() {
+        String ref = formatoGdrPdfProperties.getNormativeReference();
+        return ref == null || ref.isBlank() ? null : ref.trim();
     }
 
     private String buildFormatoGdrPdfFileName(Long evaluatedId) {
@@ -372,7 +423,8 @@ public class DocumentManagementService {
                     ),
                     normalizeMimeType(signedFile.getContentType()),
                     username,
-                    null
+                    null,
+                    resolveNormativeReferenceForDocType(signatureRequest.getDocType())
             );
             signatureRequest.setSignedDocument(storedDocument);
             signatureRequest.setDocumentRegisteredAt(LocalDateTime.now());
@@ -422,7 +474,8 @@ public class DocumentManagementService {
                     sanitizeOriginalName(archivo.getOriginalFilename()),
                     normalizeMimeType(archivo.getContentType()),
                     username,
-                    descripcionContingencia
+                    descripcionContingencia,
+                    null
             );
             notificacionesService.emitForUser(
                     username,
@@ -685,12 +738,12 @@ public class DocumentManagementService {
         return resolvedPath;
     }
 
-    private GdrEvaluationAssignment resolveActiveAssignmentForFormatoGdr(Long evaluatedId) {
+    private GdrEvaluationAssignment resolveActiveAssignmentForFormatoGdr(Long evaluatedId, Long cycleId) {
         List<GdrEvaluationAssignment> assignments =
-                assignmentRepository.findActiveByEvaluatedIdInActiveCycle(evaluatedId);
+                assignmentRepository.findActiveByEvaluatedIdAndCycle(evaluatedId, cycleId);
         if (assignments.isEmpty()) {
             throw new ResourceNotFoundException(
-                    "No se encontro una asignacion activa del evaluado en el ciclo vigente."
+                    "No se encontro una asignacion activa del evaluado en el ciclo indicado."
             );
         }
         return assignments.get(0);
@@ -932,6 +985,17 @@ public class DocumentManagementService {
                 .replace("\n", " ");
     }
 
+    private String resolveNormativeReferenceForDocType(DocType docType) {
+        if (docType == null || docType.getCode() == null) {
+            return null;
+        }
+        String code = docType.getCode().trim().toUpperCase(Locale.ROOT);
+        if (code.startsWith("FORMATO_") || DOC_TYPE_CODE_ACTA_REUNION.equals(code)) {
+            return resolveNormativeReferenceForFormatoGdr();
+        }
+        return null;
+    }
+
     private DocSignedFile persistSignedDocument(
             GdrResult result,
             DocType docType,
@@ -939,7 +1003,8 @@ public class DocumentManagementService {
             String originalName,
             String mimeType,
             String username,
-            String contingencyDescription
+            String contingencyDescription,
+            String refNormativa
     ) {
         String fileKey = documentStoragePort.store("documentos-firmados", ".pdf", content);
         String hashValue = calculateSha256(content);
@@ -962,6 +1027,7 @@ public class DocumentManagementService {
                 .build();
         signedFile = docSignedFileRepository.save(signedFile);
 
+        String normalizedRef = refNormativa != null && !refNormativa.isBlank() ? refNormativa.trim() : null;
         DocVersion documentVersion = DocVersion.builder()
                 .signedFile(signedFile)
                 .versionNumber(1)
@@ -970,6 +1036,7 @@ public class DocumentManagementService {
                 .registeredUser(username)
                 .registeredAt(LocalDateTime.now())
                 .status(ACTIVE_STATUS)
+                .refNormativa(normalizedRef)
                 .build();
         documentVersion = docVersionRepository.save(documentVersion);
 

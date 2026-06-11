@@ -49,7 +49,10 @@ public class AdminUserService {
             "GDR_ORH",
             "GDR_JUNTA_DIRECTIVOS",
             "GDR_USUARIO",
-            "GDR_CONSULTA"
+            "GDR_CONSULTA",
+            "GDR_CIE",
+            "GDR_TITULAR",
+            "GDR_AUDITOR"
     );
 
     private final UserRepository userRepository;

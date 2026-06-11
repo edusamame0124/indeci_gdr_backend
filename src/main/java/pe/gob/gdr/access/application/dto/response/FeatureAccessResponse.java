@@ -27,8 +27,23 @@ public record FeatureAccessResponse(
         boolean canViewConsents,
         boolean canViewOrhReception,
         boolean canManageUsers,
+        // T0-01: permisos GDR participación (ORH funcional, no admin técnico)
+        boolean canViewParticipacion,
+        boolean canManageParticipacion,
         boolean canViewDistinguidoCandidates,
         boolean canManageDistinguidoRequisites,
-        boolean canAssignDistinguido
+        boolean canAssignDistinguido,
+        // P0: capacidades normativas nuevas (RPE 068-2020)
+        boolean canViewCronograma,
+        boolean canEditCronograma,
+        boolean canViewSeguimiento,
+        boolean canRegistrarSeguimiento,
+        boolean canSolicitarConfirmacion,
+        boolean canViewConfirmacion,
+        boolean canViewCie,
+        boolean canResolverCasosCie,
+        boolean canViewInformeCierre,
+        boolean canGenerarInformeCierre,
+        boolean canViewAuditoria
 ) {
 }

@@ -1,0 +1,61 @@
+﻿-- ============================================================================
+-- V88 - GDR_CASO_CIE (P4)
+-- Caso derivado al Comite Institucional de Evaluacion (CIE).
+-- Normativa: RPE 068-2020-SERVIR-PE Art. 42 (el CIE confirma o modifica la
+-- calificacion; convocatoria dentro de 3 dias habiles desde la recepcion).
+-- Tablespace: TBS_GDR_DATA (el DEFAULT del usuario apunta a TBS_RRHH inexistente).
+-- ============================================================================
+
+DECLARE
+  v_count NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_count
+    FROM user_sequences
+   WHERE sequence_name = 'SQ_GDR_CASO_CIE';
+  IF v_count = 0 THEN
+    EXECUTE IMMEDIATE 'CREATE SEQUENCE SQ_GDR_CASO_CIE START WITH 1 INCREMENT BY 1 NOCACHE';
+  END IF;
+END;
+/
+
+CREATE TABLE GDR_CASO_CIE (
+  ID_CASO_CIE            NUMBER(19)          NOT NULL,
+  ID_SOLICITUD           NUMBER(19)          NOT NULL,
+  NUMERO_CASO            VARCHAR2(30)        NOT NULL,
+  FECHA_INGRESO_CIE      TIMESTAMP           NOT NULL,
+  PLAZO_CONVOCATORIA     DATE,
+  ESTADO                 VARCHAR2(30)        DEFAULT 'RECIBIDO' NOT NULL,
+  DECISION               VARCHAR2(20),
+  CALIFICACION_RESULTADO VARCHAR2(40),
+  SUSTENTO_CIE           VARCHAR2(2000 CHAR),
+  FECHA_DECISION         TIMESTAMP,
+  ID_ACTA_DOC            NUMBER(19),
+  CREATED_AT             TIMESTAMP           NOT NULL,
+  UPDATED_AT             TIMESTAMP           NOT NULL,
+  CONSTRAINT PK_GDR_CASO_CIE PRIMARY KEY (ID_CASO_CIE)
+    USING INDEX TABLESPACE TBS_GDR_DATA,
+  CONSTRAINT UK_GDR_CASOCIE_SOLICITUD UNIQUE (ID_SOLICITUD)
+    USING INDEX TABLESPACE TBS_GDR_DATA,
+  CONSTRAINT UK_GDR_CASOCIE_NUMERO UNIQUE (NUMERO_CASO)
+    USING INDEX TABLESPACE TBS_GDR_DATA,
+  CONSTRAINT FK_GDR_CASOCIE_SOLICITUD FOREIGN KEY (ID_SOLICITUD)
+    REFERENCES GDR_SOLICITUD_CONFIRMACION (ID_SOLICITUD),
+  CONSTRAINT FK_GDR_CASOCIE_ACTA FOREIGN KEY (ID_ACTA_DOC)
+    REFERENCES DOC_DOCUMENTO_FIRMADO (ID_DOCUMENTO_FIRMADO),
+  CONSTRAINT CK_GDR_CASOCIE_ESTADO CHECK (ESTADO IN ('RECIBIDO', 'RESUELTO')),
+  CONSTRAINT CK_GDR_CASOCIE_DECISION CHECK (DECISION IS NULL OR DECISION IN ('CONFIRMA', 'MODIFICA'))
+) TABLESPACE TBS_GDR_DATA;
+
+CREATE INDEX IX_GDR_CASOCIE_ESTADO ON GDR_CASO_CIE (ESTADO)
+  TABLESPACE TBS_GDR_DATA;
+CREATE INDEX IX_GDR_CASOCIE_ACTA ON GDR_CASO_CIE (ID_ACTA_DOC)
+  TABLESPACE TBS_GDR_DATA;
+
+COMMENT ON TABLE GDR_CASO_CIE IS
+  'Caso del Comite Institucional de Evaluacion derivado de una solicitud de confirmacion (RPE 068-2020 Art. 42).';
+COMMENT ON COLUMN GDR_CASO_CIE.PLAZO_CONVOCATORIA IS
+  'Fecha limite de convocatoria del CIE: +3 dias habiles desde la recepcion (alerta, no bloqueo).';
+COMMENT ON COLUMN GDR_CASO_CIE.DECISION IS
+  'CONFIRMA mantiene la calificacion; MODIFICA la reemplaza por CALIFICACION_RESULTADO. Decision definitiva.';
+COMMENT ON COLUMN GDR_CASO_CIE.ID_ACTA_DOC IS
+  'Acta de sesion CIE firmada (se integra en P6).';

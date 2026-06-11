@@ -1,6 +1,7 @@
 package pe.gob.gdr.access.application.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -9,20 +10,30 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
+import pe.gob.gdr.access.application.dto.response.CasoCieResponse;
 import pe.gob.gdr.access.application.dto.response.ReporteAvanceResponse;
+import pe.gob.gdr.access.application.dto.response.ReporteDistribucionCalificacionResponse;
 import pe.gob.gdr.access.application.dto.response.ReporteOportunidadMejoraResponse;
 import pe.gob.gdr.access.application.dto.response.ReporteResultadoResponse;
+import pe.gob.gdr.access.application.dto.response.SolicitudConfirmacionResponse;
+import pe.gob.gdr.access.application.mapper.GdrConfirmacionMapper;
+import pe.gob.gdr.access.domain.model.ActiveCycle;
 import pe.gob.gdr.access.domain.model.DocSignedFile;
 import pe.gob.gdr.access.domain.model.GdrEvidence;
 import pe.gob.gdr.access.domain.model.GdrGoal;
 import pe.gob.gdr.access.domain.model.GdrImprovementOpportunity;
 import pe.gob.gdr.access.domain.model.GdrResult;
+import pe.gob.gdr.access.domain.model.GdrSolicitudConfirmacion;
+import pe.gob.gdr.access.domain.policy.QualitativeRating;
+import pe.gob.gdr.access.domain.repository.ActiveCycleRepository;
 import pe.gob.gdr.access.domain.repository.DocSignedFileRepository;
+import pe.gob.gdr.access.domain.repository.GdrCasoCieRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvidenceRepository;
 import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 import pe.gob.gdr.access.domain.repository.GdrImprovementFollowupRepository;
 import pe.gob.gdr.access.domain.repository.GdrImprovementOpportunityRepository;
 import pe.gob.gdr.access.domain.repository.GdrResultRepository;
+import pe.gob.gdr.access.domain.repository.GdrSolicitudConfirmacionRepository;
 
 @Service
 public class ReportesService {
@@ -33,6 +44,10 @@ public class ReportesService {
     private final DocSignedFileRepository signedFileRepository;
     private final GdrImprovementOpportunityRepository improvementOpportunityRepository;
     private final GdrImprovementFollowupRepository improvementFollowupRepository;
+    private final GdrSolicitudConfirmacionRepository solicitudConfirmacionRepository;
+    private final GdrCasoCieRepository casoCieRepository;
+    private final ActiveCycleRepository activeCycleRepository;
+    private final GdrConfirmacionMapper confirmacionMapper;
     private final AuditTrailService auditTrailService;
 
     public ReportesService(
@@ -42,6 +57,10 @@ public class ReportesService {
             DocSignedFileRepository signedFileRepository,
             GdrImprovementOpportunityRepository improvementOpportunityRepository,
             GdrImprovementFollowupRepository improvementFollowupRepository,
+            GdrSolicitudConfirmacionRepository solicitudConfirmacionRepository,
+            GdrCasoCieRepository casoCieRepository,
+            ActiveCycleRepository activeCycleRepository,
+            GdrConfirmacionMapper confirmacionMapper,
             AuditTrailService auditTrailService
     ) {
         this.goalRepository = goalRepository;
@@ -50,15 +69,19 @@ public class ReportesService {
         this.signedFileRepository = signedFileRepository;
         this.improvementOpportunityRepository = improvementOpportunityRepository;
         this.improvementFollowupRepository = improvementFollowupRepository;
+        this.solicitudConfirmacionRepository = solicitudConfirmacionRepository;
+        this.casoCieRepository = casoCieRepository;
+        this.activeCycleRepository = activeCycleRepository;
+        this.confirmacionMapper = confirmacionMapper;
         this.auditTrailService = auditTrailService;
     }
 
-    public List<ReporteAvanceResponse> getProgressReport(Long evaluatedId) {
-        List<GdrGoal> goals = goalRepository.findActiveGoalsForActiveCycle();
-        List<GdrEvidence> evidences = evidenceRepository.findActiveForActiveCycle();
-        List<GdrResult> results = resultRepository.findAllInActiveCycle();
-        List<DocSignedFile> signedFiles = signedFileRepository.findAllInActiveCycle();
-        List<GdrImprovementOpportunity> opportunities = improvementOpportunityRepository.findAllInActiveCycle();
+    public List<ReporteAvanceResponse> getProgressReport(Long evaluatedId, Long cycleId) {
+        List<GdrGoal> goals = goalRepository.findActiveGoalsByCycle(cycleId);
+        List<GdrEvidence> evidences = evidenceRepository.findActiveByCycle(cycleId);
+        List<GdrResult> results = resultRepository.findAllByCycleId(cycleId);
+        List<DocSignedFile> signedFiles = signedFileRepository.findAllByCycleId(cycleId);
+        List<GdrImprovementOpportunity> opportunities = improvementOpportunityRepository.findAllByCycleId(cycleId);
 
         Map<Long, List<GdrGoal>> goalsByAssignment = groupByAssignment(goals);
         Map<Long, Integer> evidenceCountByAssignment = new HashMap<>();
@@ -120,14 +143,14 @@ public class ReportesService {
                 .toList();
     }
 
-    public List<ReporteResultadoResponse> getResultsReport(Long evaluatedId) {
-        Map<Long, Integer> documentCountByResult = countDocumentsByResult(signedFileRepository.findAllInActiveCycle());
+    public List<ReporteResultadoResponse> getResultsReport(Long evaluatedId, Long cycleId) {
+        Map<Long, Integer> documentCountByResult = countDocumentsByResult(signedFileRepository.findAllByCycleId(cycleId));
         Map<Long, Integer> improvementCountByResult = new HashMap<>();
-        for (GdrImprovementOpportunity opportunity : improvementOpportunityRepository.findAllInActiveCycle()) {
+        for (GdrImprovementOpportunity opportunity : improvementOpportunityRepository.findAllByCycleId(cycleId)) {
             improvementCountByResult.merge(opportunity.getResult().getId(), 1, Integer::sum);
         }
 
-        return resultRepository.findAllInActiveCycle().stream()
+        return resultRepository.findAllByCycleId(cycleId).stream()
                 .filter(result -> evaluatedId == null || result.getAssignment().getEvaluatedPerson().getId().equals(evaluatedId))
                 .map(result -> new ReporteResultadoResponse(
                         result.getId(),
@@ -144,9 +167,9 @@ public class ReportesService {
                 .toList();
     }
 
-    public List<ReporteOportunidadMejoraResponse> getImprovementReport(Long evaluatedId, String estadoCodigo) {
+    public List<ReporteOportunidadMejoraResponse> getImprovementReport(Long evaluatedId, String estadoCodigo, Long cycleId) {
         String normalizedState = estadoCodigo == null ? null : estadoCodigo.trim().toUpperCase(Locale.ROOT);
-        return improvementOpportunityRepository.findAllInActiveCycle().stream()
+        return improvementOpportunityRepository.findAllByCycleId(cycleId).stream()
                 .filter(opportunity -> evaluatedId == null
                         || opportunity.getResult().getAssignment().getEvaluatedPerson().getId().equals(evaluatedId))
                 .filter(opportunity -> normalizedState == null
@@ -212,6 +235,103 @@ public class ReportesService {
                                 row.comentarioEvaluacion() == null ? "" : row.comentarioEvaluacion(),
                                 String.valueOf(row.documentosFirmados()),
                                 String.valueOf(row.oportunidadesMejora())
+                        ))
+                        .toList()
+        );
+    }
+
+    public List<SolicitudConfirmacionResponse> getConfirmacionesReport() {
+        ActiveCycle cycle = requireActiveCycle();
+        return solicitudConfirmacionRepository.findByCycleIdOrderByFechaSolicitud(cycle.getId()).stream()
+                .map(solicitud -> confirmacionMapper.toSolicitudResponse(
+                        solicitud,
+                        casoCieRepository.findBySolicitudId(solicitud.getId()).orElse(null)
+                ))
+                .toList();
+    }
+
+    public List<CasoCieResponse> getCieReport() {
+        return casoCieRepository.findAllOrderByFechaIngreso().stream()
+                .map(caso -> confirmacionMapper.toCasoResponse(caso, null, false))
+                .toList();
+    }
+
+    public List<ReporteDistribucionCalificacionResponse> getDistribucionCalificacionesReport(Long cycleId) {
+        List<GdrResult> results = resultRepository.findAllByCycleId(cycleId);
+        if (results.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (GdrResult result : results) {
+            String code = result.getQualitativeRatingCode() == null
+                    ? QualitativeRating.NO_CALIFICABLE.code()
+                    : result.getQualitativeRatingCode();
+            counts.merge(code, 1, Integer::sum);
+        }
+        int total = results.size();
+        return counts.entrySet().stream()
+                .map(entry -> new ReporteDistribucionCalificacionResponse(
+                        entry.getKey(),
+                        QualitativeRating.labelOf(entry.getKey()),
+                        entry.getValue(),
+                        BigDecimal.valueOf(entry.getValue() * 100.0 / total).setScale(2, RoundingMode.HALF_UP)
+                ))
+                .toList();
+    }
+
+    public byte[] exportConfirmacionesCsv(List<SolicitudConfirmacionResponse> rows, String username) {
+        auditTrailService.recordEvent("REPORTE_CONFIRMACIONES_EXPORTADO", username, "Se exportó el reporte de confirmaciones.", null);
+        return toCsv(
+                List.of("id", "evaluado", "ciclo", "estado", "numeroCaso", "decision", "calificacionResultado", "fechaSolicitud"),
+                rows.stream()
+                        .map(row -> List.of(
+                                String.valueOf(row.id()),
+                                row.evaluadoNombre(),
+                                row.cicloNombre(),
+                                row.estadoLabel(),
+                                row.numeroCaso() == null ? "" : row.numeroCaso(),
+                                row.decision() == null ? "" : row.decision(),
+                                row.calificacionResultadoLabel() == null ? "" : row.calificacionResultadoLabel(),
+                                row.fechaSolicitud() == null ? "" : row.fechaSolicitud().toString()
+                        ))
+                        .toList()
+        );
+    }
+
+    public byte[] exportCieCsv(List<CasoCieResponse> rows, String username) {
+        auditTrailService.recordEvent("REPORTE_CIE_EXPORTADO", username, "Se exportó el reporte de casos CIE.", null);
+        return toCsv(
+                List.of("id", "numeroCaso", "evaluado", "evaluador", "estado", "decision", "calificacionResultado", "fechaIngresoCie"),
+                rows.stream()
+                        .map(row -> List.of(
+                                String.valueOf(row.id()),
+                                row.numeroCaso(),
+                                row.evaluadoNombre(),
+                                row.evaluadorNombre(),
+                                row.estadoLabel(),
+                                row.decision() == null ? "" : row.decision(),
+                                row.calificacionResultadoLabel() == null ? "" : row.calificacionResultadoLabel(),
+                                row.fechaIngresoCie() == null ? "" : row.fechaIngresoCie().toString()
+                        ))
+                        .toList()
+        );
+    }
+
+    public byte[] exportDistribucionCsv(List<ReporteDistribucionCalificacionResponse> rows, String username) {
+        auditTrailService.recordEvent(
+                "REPORTE_DISTRIBUCION_EXPORTADO",
+                username,
+                "Se exportó el reporte de distribución de calificaciones.",
+                null
+        );
+        return toCsv(
+                List.of("codigoCalificacion", "etiquetaCalificacion", "cantidad", "porcentaje"),
+                rows.stream()
+                        .map(row -> List.of(
+                                row.codigoCalificacion(),
+                                row.etiquetaCalificacion() == null ? "" : row.etiquetaCalificacion(),
+                                String.valueOf(row.cantidad()),
+                                row.porcentaje().toPlainString()
                         ))
                         .toList()
         );
@@ -290,5 +410,10 @@ public class ReportesService {
         String safe = value == null ? "" : value;
         String escaped = safe.replace("\"", "\"\"");
         return "\"" + escaped + "\"";
+    }
+
+    private ActiveCycle requireActiveCycle() {
+        return activeCycleRepository.findActiveCycle()
+                .orElseThrow(() -> new IllegalStateException("No existe un ciclo activo para generar el reporte."));
     }
 }

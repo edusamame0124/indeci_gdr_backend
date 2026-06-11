@@ -100,4 +100,106 @@ public interface JpaGdrEvidenceRepository extends JpaRepository<GdrEvidence, Lon
               and upper(cycle.status) = 'ACTIVE'
             """)
     long countActiveByGoalIdInActiveCycle(@Param("goalId") Long goalId);
+
+    // ── Implementaciones cycle-aware (P2) ─────────────────────────────────────
+
+    @Override
+    @Query("""
+            select evidence
+            from GdrEvidence evidence
+            join fetch evidence.goal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evidence.evidenceStatus evidenceStatus
+            where assignment.cycle.id = :cycleId
+              and upper(evidence.status) = 'ACTIVE'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by evidence.updatedAt desc, evidence.id desc
+            """)
+    List<GdrEvidence> findActiveByCycle(@Param("cycleId") Long cycleId);
+
+    @Override
+    @Query("""
+            select evidence
+            from GdrEvidence evidence
+            join fetch evidence.goal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evidence.evidenceStatus evidenceStatus
+            where goal.id = :goalId
+              and assignment.cycle.id = :cycleId
+              and upper(evidence.status) = 'ACTIVE'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by evidence.updatedAt desc, evidence.id desc
+            """)
+    List<GdrEvidence> findActiveByGoalIdAndCycle(
+            @Param("goalId") Long goalId,
+            @Param("cycleId") Long cycleId
+    );
+
+    @Override
+    @Query("""
+            select evidence
+            from GdrEvidence evidence
+            join fetch evidence.goal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evidence.evidenceStatus evidenceStatus
+            where evidence.id = :evidenceId
+              and assignment.cycle.id = :cycleId
+              and upper(evidence.status) = 'ACTIVE'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            """)
+    Optional<GdrEvidence> findActiveByIdAndCycle(
+            @Param("evidenceId") Long evidenceId,
+            @Param("cycleId") Long cycleId
+    );
+
+    @Override
+    @Query("""
+            select evidence
+            from GdrEvidence evidence
+            join fetch evidence.goal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evidence.evidenceStatus evidenceStatus
+            where assignment.id = :assignmentId
+              and assignment.cycle.id = :cycleId
+              and upper(evidence.status) = 'ACTIVE'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by evidence.updatedAt desc, evidence.id desc
+            """)
+    List<GdrEvidence> findActiveByAssignmentIdAndCycle(
+            @Param("assignmentId") Long assignmentId,
+            @Param("cycleId") Long cycleId
+    );
+
+    @Override
+    @Query("""
+            select count(evidence)
+            from GdrEvidence evidence
+            join evidence.goal goal
+            join goal.assignment assignment
+            where goal.id = :goalId
+              and assignment.cycle.id = :cycleId
+              and upper(evidence.status) = 'ACTIVE'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            """)
+    long countActiveByGoalIdAndCycle(
+            @Param("goalId") Long goalId,
+            @Param("cycleId") Long cycleId
+    );
 }

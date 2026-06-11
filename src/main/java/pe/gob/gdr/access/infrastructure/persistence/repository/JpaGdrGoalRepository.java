@@ -108,4 +108,111 @@ public interface JpaGdrGoalRepository extends JpaRepository<GdrGoal, Long>, GdrG
             @Param("assignmentId") Long assignmentId,
             @Param("excludedGoalId") Long excludedGoalId
     );
+
+    @Override
+    @Query("""
+            select evaluated.displayName
+            from GdrGoal goal
+            join goal.assignment assignment
+            join assignment.cycle cycle
+            join assignment.evaluatedPerson evaluated
+            where cycle.id = :cycleId
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            group by assignment.id, evaluated.displayName
+            having sum(goal.weight) < 99.995 or sum(goal.weight) > 100.005
+            order by evaluated.displayName asc
+            """)
+    List<String> findEvaluadosConPesoIncorrectoEnCiclo(@Param("cycleId") Long cycleId);
+
+    // ── Implementaciones cycle-aware (P2) ─────────────────────────────────────
+
+    @Override
+    @Query("""
+            select goal
+            from GdrGoal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evaluated.orgUnit evaluatedOrg
+            join fetch goal.indicator indicator
+            join fetch indicator.valueType valueType
+            join fetch indicator.formula formula
+            join fetch indicator.segment segment
+            where assignment.cycle.id = :cycleId
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by goal.updatedAt desc, goal.id desc
+            """)
+    List<GdrGoal> findActiveGoalsByCycle(@Param("cycleId") Long cycleId);
+
+    @Override
+    @Query("""
+            select goal
+            from GdrGoal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch evaluator.orgUnit evaluatorOrg
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evaluated.orgUnit evaluatedOrg
+            join fetch goal.indicator indicator
+            join fetch indicator.valueType valueType
+            join fetch indicator.formula formula
+            join fetch indicator.segment segment
+            where goal.id = :goalId
+              and assignment.cycle.id = :cycleId
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            """)
+    Optional<GdrGoal> findActiveByIdAndCycle(@Param("goalId") Long goalId, @Param("cycleId") Long cycleId);
+
+    @Override
+    @Query("""
+            select goal
+            from GdrGoal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch goal.indicator indicator
+            join fetch indicator.valueType valueType
+            join fetch indicator.formula formula
+            join fetch indicator.segment segment
+            where assignment.id = :assignmentId
+              and assignment.cycle.id = :cycleId
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by goal.updatedAt desc, goal.id desc
+            """)
+    List<GdrGoal> findActiveGoalsByAssignmentIdAndCycle(
+            @Param("assignmentId") Long assignmentId,
+            @Param("cycleId") Long cycleId
+    );
+
+    @Override
+    @Query("""
+            select goal
+            from GdrGoal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch evaluator.orgUnit evaluatorOrg
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evaluated.orgUnit evaluatedOrg
+            join fetch goal.indicator indicator
+            join fetch indicator.valueType valueType
+            join fetch indicator.formula formula
+            join fetch indicator.segment segment
+            where (evaluator.id = :personId or evaluated.id = :personId)
+              and assignment.cycle.id = :cycleId
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by goal.updatedAt desc, goal.id desc
+            """)
+    List<GdrGoal> findActiveGoalsByPersonIdAndCycle(
+            @Param("personId") Long personId,
+            @Param("cycleId") Long cycleId
+    );
 }

@@ -147,4 +147,96 @@ public interface JpaGdrEvaluationAssignmentRepository
               and upper(goal.status) = 'ACTIVE'
             """)
     boolean hasActiveGoals(@Param("assignmentId") Long assignmentId);
+
+    // ── Implementaciones cycle-aware (P2) ─────────────────────────────────────
+
+    @Override
+    @Query("""
+            select assignment
+            from GdrEvaluationAssignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch evaluator.orgUnit evaluatorOrg
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evaluated.orgUnit evaluatedOrg
+            join fetch assignment.segment seg
+            where assignment.cycle.id = :cycleId
+              and upper(assignment.status) = 'ACTIVE'
+            order by evaluated.displayName asc, evaluator.displayName asc
+            """)
+    List<GdrEvaluationAssignment> findActiveAssignmentsByCycle(@Param("cycleId") Long cycleId);
+
+    @Override
+    @Query("""
+            select assignment
+            from GdrEvaluationAssignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch evaluator.orgUnit evaluatorOrg
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evaluated.orgUnit evaluatedOrg
+            join fetch assignment.segment seg
+            where assignment.id = :assignmentId
+              and assignment.cycle.id = :cycleId
+              and upper(assignment.status) = 'ACTIVE'
+            """)
+    Optional<GdrEvaluationAssignment> findActiveByIdAndCycle(
+            @Param("assignmentId") Long assignmentId,
+            @Param("cycleId") Long cycleId
+    );
+
+    @Override
+    @Query("""
+            select assignment
+            from GdrEvaluationAssignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch evaluator.orgUnit evaluatorOrg
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evaluated.orgUnit evaluatedOrg
+            join fetch assignment.segment seg
+            where evaluated.id = :evaluatedId
+              and assignment.cycle.id = :cycleId
+              and upper(assignment.status) = 'ACTIVE'
+            order by assignment.id asc
+            """)
+    List<GdrEvaluationAssignment> findActiveByEvaluatedIdAndCycle(
+            @Param("evaluatedId") Long evaluatedId,
+            @Param("cycleId") Long cycleId
+    );
+
+    @Override
+    @Query("""
+            select assignment
+            from GdrEvaluationAssignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch evaluator.orgUnit evaluatorOrg
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evaluated.orgUnit evaluatedOrg
+            join fetch assignment.segment seg
+            where (evaluator.id = :personId or evaluated.id = :personId)
+              and assignment.cycle.id = :cycleId
+              and upper(assignment.status) = 'ACTIVE'
+            order by assignment.id asc
+            """)
+    List<GdrEvaluationAssignment> findActiveByPersonIdAndCycle(
+            @Param("personId") Long personId,
+            @Param("cycleId") Long cycleId
+    );
+
+    @Override
+    @Query("""
+            select a.evaluatedPerson.displayName
+            from GdrEvaluationAssignment a
+            where a.cycle.id = :cycleId
+              and upper(a.status) = 'ACTIVE'
+              and not exists (
+                select 1 from GdrFinalEvaluation e
+                where e.assignment.id = a.id
+                  and upper(e.status) = 'ACTIVE'
+              )
+            order by a.evaluatedPerson.displayName asc
+            """)
+    List<String> findNombresSinEvaluacionFinalEnCiclo(@Param("cycleId") Long cycleId);
 }

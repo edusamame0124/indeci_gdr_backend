@@ -23,6 +23,8 @@ public class NotificacionesService {
     public static final String OPORTUNIDAD_MEJORA_REGISTRADA = "OPORTUNIDAD_MEJORA_REGISTRADA";
     public static final String SEGUIMIENTO_MEJORA_REGISTRADO = "SEGUIMIENTO_MEJORA_REGISTRADO";
     public static final String OPORTUNIDAD_MEJORA_CERRADA = "OPORTUNIDAD_MEJORA_CERRADA";
+    public static final String CASO_CIE_DERIVADO = "CASO_CIE_DERIVADO";
+    public static final String CONFIRMACION_RESUELTA = "CONFIRMACION_RESUELTA";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NotificacionesService.class);
 

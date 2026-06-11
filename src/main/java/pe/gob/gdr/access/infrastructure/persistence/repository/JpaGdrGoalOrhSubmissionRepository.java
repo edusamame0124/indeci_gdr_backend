@@ -68,4 +68,48 @@ public interface JpaGdrGoalOrhSubmissionRepository
             order by submission.submittedAt desc, submission.id desc
             """)
     List<GdrGoalOrhSubmission> findActiveReceptionItemsInActiveCycle();
+
+    // ── Implementaciones cycle-aware (P2) ─────────────────────────────────────
+
+    @Override
+    @Query("""
+            select submission
+            from GdrGoalOrhSubmission submission
+            join fetch submission.goal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch goal.indicator indicator
+            join fetch submission.submittedByUser submittedBy
+            left join fetch submission.reviewedByUser reviewedBy
+            where submission.id = :id
+              and cycle.id = :cycleId
+              and upper(submission.recordStatus) = 'ACTIVO'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            """)
+    Optional<GdrGoalOrhSubmission> findActiveByIdAndCycle(@Param("id") Long id, @Param("cycleId") Long cycleId);
+
+    @Override
+    @Query("""
+            select submission
+            from GdrGoalOrhSubmission submission
+            join fetch submission.goal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch goal.indicator indicator
+            join fetch submission.submittedByUser submittedBy
+            left join fetch submission.reviewedByUser reviewedBy
+            where cycle.id = :cycleId
+              and submission.status in (
+                    pe.gob.gdr.access.domain.model.GoalOrhSubmissionStatus.ENVIADO,
+                    pe.gob.gdr.access.domain.model.GoalOrhSubmissionStatus.REVISADO
+                )
+              and upper(submission.recordStatus) = 'ACTIVO'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by submission.submittedAt desc, submission.id desc
+            """)
+    List<GdrGoalOrhSubmission> findActiveReceptionItemsByCycle(@Param("cycleId") Long cycleId);
 }

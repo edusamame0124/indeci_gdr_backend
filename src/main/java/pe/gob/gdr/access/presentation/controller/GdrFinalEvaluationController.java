@@ -11,8 +11,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import pe.gob.gdr.access.application.dto.request.GuardarEvaluacionFinalRequest;
+import pe.gob.gdr.access.application.dto.request.RegistrarRetroFinalRequest;
 import pe.gob.gdr.access.application.dto.response.ApiResponse;
 import pe.gob.gdr.access.application.dto.response.DetalleEvaluacionFinalResponse;
 import pe.gob.gdr.access.application.dto.response.NotificarCalificacionMailResponse;
@@ -37,9 +39,12 @@ public class GdrFinalEvaluationController {
 
     @GetMapping
     @PreAuthorize("@gdrAccessPolicyService.canViewFinalEvaluations(authentication)")
-    public ResponseEntity<ApiResponse<List<ResumenEvaluacionFinalResponse>>> listFinalEvaluations(Principal principal) {
+    public ResponseEntity<ApiResponse<List<ResumenEvaluacionFinalResponse>>> listFinalEvaluations(
+            @RequestParam Long cycleId,
+            Principal principal
+    ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                finalEvaluationService.listFinalEvaluations(principal.getName()),
+                finalEvaluationService.listFinalEvaluations(principal.getName(), cycleId),
                 "Evaluaciones finales consultadas correctamente."
         ));
     }
@@ -48,10 +53,11 @@ public class GdrFinalEvaluationController {
     @PreAuthorize("@gdrAccessPolicyService.canViewFinalEvaluationByEvaluated(authentication, #evaluatedId)")
     public ResponseEntity<ApiResponse<DetalleEvaluacionFinalResponse>> getFinalEvaluation(
             @PathVariable Long evaluatedId,
+            @RequestParam Long cycleId,
             Principal principal
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                finalEvaluationService.getFinalEvaluation(principal.getName(), evaluatedId),
+                finalEvaluationService.getFinalEvaluation(principal.getName(), evaluatedId, cycleId),
                 "Detalle de evaluacion consultado correctamente."
         ));
     }
@@ -59,10 +65,11 @@ public class GdrFinalEvaluationController {
     @PostMapping
     @PreAuthorize("@gdrAccessPolicyService.canManageFinalEvaluationForAssignment(authentication, #request.assignmentId())")
     public ResponseEntity<ApiResponse<DetalleEvaluacionFinalResponse>> createFinalEvaluation(
+            @RequestParam Long cycleId,
             @Valid @RequestBody GuardarEvaluacionFinalRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                finalEvaluationService.createFinalEvaluation(request),
+                finalEvaluationService.createFinalEvaluation(request, cycleId),
                 "Evaluacion final registrada correctamente."
         ));
     }
@@ -71,11 +78,25 @@ public class GdrFinalEvaluationController {
     @PreAuthorize("@gdrAccessPolicyService.canManageFinalEvaluationById(authentication, #evaluationId)")
     public ResponseEntity<ApiResponse<DetalleEvaluacionFinalResponse>> updateFinalEvaluation(
             @PathVariable Long evaluationId,
+            @RequestParam Long cycleId,
             @Valid @RequestBody GuardarEvaluacionFinalRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                finalEvaluationService.updateFinalEvaluation(evaluationId, request),
+                finalEvaluationService.updateFinalEvaluation(evaluationId, request, cycleId),
                 "Evaluacion final actualizada correctamente."
+        ));
+    }
+
+    @PutMapping("/{evaluationId}/retroalimentacion-final")
+    @PreAuthorize("@gdrAccessPolicyService.canManageFinalEvaluationById(authentication, #evaluationId)")
+    public ResponseEntity<ApiResponse<DetalleEvaluacionFinalResponse>> registrarRetroalimentacionFinal(
+            @PathVariable Long evaluationId,
+            @RequestParam Long cycleId,
+            @Valid @RequestBody RegistrarRetroFinalRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                finalEvaluationService.registrarRetroalimentacionFinal(evaluationId, request, cycleId),
+                "Reunion de retroalimentacion final registrada correctamente."
         ));
     }
 

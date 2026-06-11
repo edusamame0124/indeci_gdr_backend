@@ -13,6 +13,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -52,6 +53,14 @@ public class GdrFinalEvaluation {
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";
+
+    /** Fecha de reunión de retroalimentación final (RPE 068-2020 Art. 33-39). */
+    @Column(name = "FECHA_REUNION_RETRO_FINAL")
+    private LocalDate fechaReunionRetroFinal;
+
+    /** Plazo límite para solicitar confirmación: +5 días hábiles (RPE 068-2020 Art. 41). */
+    @Column(name = "PLAZO_SOLICITUD_CONFIRMACION")
+    private LocalDate plazoSolicitudConfirmacion;
 
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -62,4 +62,63 @@ public interface JpaGdrResultRepository extends JpaRepository<GdrResult, Long>, 
               and upper(cycle.status) = 'ACTIVE'
             """)
     Optional<GdrResult> findByEvaluatedPersonIdInActiveCycle(@Param("evaluatedId") Long evaluatedId);
+
+    // ── Implementaciones cycle-aware (P2) ─────────────────────────────────────
+
+    @Override
+    @Query("""
+            select result
+            from GdrResult result
+            join fetch result.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch evaluator.orgUnit evaluatorOrg
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch evaluated.orgUnit evaluatedOrg
+            join fetch result.finalEvaluation evaluation
+            where assignment.cycle.id = :cycleId
+              and upper(result.status) = 'ACTIVE'
+              and upper(evaluation.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by result.updatedAt desc, result.id desc
+            """)
+    List<GdrResult> findAllByCycleId(@Param("cycleId") Long cycleId);
+
+    @Override
+    @Query("""
+            select result
+            from GdrResult result
+            join fetch result.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch result.finalEvaluation evaluation
+            where assignment.id = :assignmentId
+              and assignment.cycle.id = :cycleId
+              and upper(result.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            """)
+    Optional<GdrResult> findByAssignmentIdAndCycle(
+            @Param("assignmentId") Long assignmentId,
+            @Param("cycleId") Long cycleId
+    );
+
+    @Override
+    @Query("""
+            select result
+            from GdrResult result
+            join fetch result.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatorPerson evaluator
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch result.finalEvaluation evaluation
+            where evaluated.id = :evaluatedId
+              and assignment.cycle.id = :cycleId
+              and upper(result.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            """)
+    Optional<GdrResult> findByEvaluatedPersonIdAndCycle(
+            @Param("evaluatedId") Long evaluatedId,
+            @Param("cycleId") Long cycleId
+    );
 }

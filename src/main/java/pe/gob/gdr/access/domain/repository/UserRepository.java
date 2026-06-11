@@ -18,6 +18,8 @@ public interface UserRepository {
 
     List<User> findActiveGdrUsersByPersonId(Long personId);
 
+    List<String> findActiveUsernamesByRoleCode(String roleCode);
+
     boolean existsByUsername(String username);
 
     boolean existsByEmail(String email);

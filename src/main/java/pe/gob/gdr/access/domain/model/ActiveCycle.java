@@ -53,6 +53,19 @@ public class ActiveCycle {
     @Column(name = "QUAL_NOTIFY_DEADLINE_DATE")
     private LocalDate qualNotifyDeadlineDate;
 
+    @Column(name = "ESTADO_ETAPA", nullable = false, length = 50)
+    @Builder.Default
+    private String estadoEtapa = "BORRADOR";
+
+    @Column(name = "FECHA_FIN_SEGUIMIENTO")
+    private LocalDate fechaFinSeguimiento;
+
+    @Column(name = "FECHA_FIN_EVALUACION")
+    private LocalDate fechaFinEvaluacion;
+
+    @Column(name = "FECHA_LIMITE_INFORME")
+    private LocalDate fechaLimiteInforme;
+
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";

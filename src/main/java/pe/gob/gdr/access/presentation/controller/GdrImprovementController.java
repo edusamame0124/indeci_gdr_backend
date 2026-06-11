@@ -33,10 +33,11 @@ public class GdrImprovementController {
     @GetMapping
     @PreAuthorize("@gdrAccessPolicyService.canAccessImprovementsForEvaluated(authentication, #evaluatedId)")
     public ResponseEntity<ApiResponse<List<OportunidadMejoraResumenResponse>>> listImprovements(
-            @RequestParam("evaluatedId") Long evaluatedId
+            @RequestParam("evaluatedId") Long evaluatedId,
+            @RequestParam Long cycleId
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                improvementService.listImprovements(evaluatedId),
+                improvementService.listImprovements(evaluatedId, cycleId),
                 "Oportunidades de mejora consultadas correctamente."
         ));
     }
@@ -44,11 +45,12 @@ public class GdrImprovementController {
     @PostMapping
     @PreAuthorize("@gdrAccessPolicyService.canCreateImprovementForEvaluated(authentication, #request.evaluatedId())")
     public ResponseEntity<ApiResponse<OportunidadMejoraDetalleResponse>> createImprovement(
+            @RequestParam Long cycleId,
             @Valid @RequestBody RegistrarOportunidadMejoraRequest request,
             Principal principal
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                improvementService.createImprovement(request, principal.getName()),
+                improvementService.createImprovement(request, principal.getName(), cycleId),
                 "Oportunidad de mejora registrada correctamente."
         ));
     }

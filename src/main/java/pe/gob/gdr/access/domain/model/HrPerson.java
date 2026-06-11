@@ -43,6 +43,14 @@ public class HrPerson {
     @Column(name = "DISPLAY_NAME", nullable = false, length = 150)
     private String displayName;
 
+    /** P6 — Formato GDR 2025 (RPE 000041-2025/PE): denominación del puesto. */
+    @Column(name = "CARGO", length = 200)
+    private String cargo;
+
+    /** P6 — Formato GDR 2025: nivel remunerativo institucional. */
+    @Column(name = "NIVEL_REMUNERATIVO", length = 80)
+    private String nivelRemunerativo;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "ID_ORG_UNIT", nullable = false)
     private HrOrgUnit orgUnit;

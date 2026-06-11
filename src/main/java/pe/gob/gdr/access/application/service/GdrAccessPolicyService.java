@@ -39,6 +39,9 @@ public class GdrAccessPolicyService {
     public static final String ACTOR_EVALUADOR_Y_EVALUADO = "EVALUADOR_Y_EVALUADO";
     public static final String ACTOR_CONSULTA = "CONSULTA";
     public static final String ACTOR_SIN_ROL_FUNCIONAL = "SIN_ROL_FUNCIONAL_GDR";
+    public static final String ACTOR_CIE = "CIE";
+    public static final String ACTOR_TITULAR = "TITULAR";
+    public static final String ACTOR_AUDITOR = "AUDITOR";
     public static final String SCOPE_ADMIN = "ADMIN_TECNICO";
     public static final String SCOPE_INSTITUTIONAL = "INSTITUCIONAL_GDR";
     public static final String SCOPE_EVALUATOR = "ASIGNACIONES_A_CARGO";
@@ -48,6 +51,7 @@ public class GdrAccessPolicyService {
     public static final String SCOPE_NO_HR_IDENTITY = "SIN_IDENTIDAD_LABORAL";
     public static final String SCOPE_NO_CYCLE = "SIN_CICLO_ACTIVO";
     public static final String SCOPE_NO_GDR_ACCESS = "SIN_ACCESO_GDR";
+    private static final String CONTEXT_STATUS_ACTIVE = "ACTIVE";
 
     private final UserRepository userRepository;
     private final ActiveCycleRepository activeCycleRepository;
@@ -86,11 +90,15 @@ public class GdrAccessPolicyService {
 
     public ActiveCycleContextResponse resolveContext(User user) {
         Optional<ActiveCycle> activeCycle = activeCycleRepository.findActiveCycle();
-        Optional<UserContextAssignment> assignedContext = activeCycle
-                .flatMap(cycle -> userContextAssignmentRepository.findActiveByUsernameAndCycleId(user.getUsername(), cycle.getId()));
         HrPerson person = user.getPerson();
         boolean hrPersonLinked = person != null;
         String functionalActor = resolveFunctionalActor(user, activeCycle.orElse(null), person);
+        Optional<UserContextAssignment> assignedContext = activeCycle
+                .flatMap(cycle -> userContextAssignmentRepository.findActiveByUsernameAndCycleId(user.getUsername(), cycle.getId()));
+        if (activeCycle.isPresent() && hrPersonLinked && assignedContext.isEmpty()
+                && isInstitutionalFunctionalActor(functionalActor)) {
+            assignedContext = Optional.of(ensureInstitutionalCycleContext(user, activeCycle.get()));
+        }
         String operationalScope = resolveOperationalScope(user, activeCycle.isPresent(), hrPersonLinked, functionalActor);
         boolean gdrOperational = resolveGdrOperational(user, activeCycle.isPresent(), hrPersonLinked, functionalActor);
 
@@ -111,7 +119,8 @@ public class GdrAccessPolicyService {
                 hrPersonLinked ? person.getOrgUnit().getName() : null,
                 functionalActor,
                 operationalScope,
-                gdrOperational
+                gdrOperational,
+                activeCycle.map(ActiveCycle::getEstadoEtapa).orElse(null)
         );
     }
 
@@ -132,6 +141,9 @@ public class GdrAccessPolicyService {
                 && context.cycleActive()
                 && ACTOR_ORH.equals(context.functionalActor());
         boolean userManagement = hasAnyTechnicalRole(user, Set.of("ADMIN_SISTEMA"));
+        boolean viewParticipacion = (isOrh(user) && context.hrPersonLinked()) || admin;
+        boolean manageParticipacion = isOrh(user) && context.hrPersonLinked() && context.cycleActive()
+                && ACTOR_ORH.equals(context.functionalActor());
         boolean orhDistinguido = isOrh(user)
                 && context.hrPersonLinked()
                 && context.cycleActive()
@@ -144,9 +156,14 @@ public class GdrAccessPolicyService {
         boolean manageDistinguidoRequisites = admin || orhDistinguido;
         boolean assignDistinguido = admin || juntaDistinguido;
 
+        boolean cieScope = isCie(user) && context.hrPersonLinked() && context.cycleActive()
+                && ACTOR_CIE.equals(context.functionalActor());
+        boolean titularScope = isTitular(user) && context.hrPersonLinked();
+        boolean auditorScope = isAuditor(user) && context.hrPersonLinked();
+
         return new FeatureAccessResponse(
                 true,
-                admin || institutionalGdr || ownAssignments,
+                admin || institutionalGdr || ownAssignments || cieScope,
                 admin || institutionalGdr || ownAssignments,
                 admin || institutionalGdr || ownAssignments,
                 admin || institutionalGdr || ownAssignments,
@@ -155,7 +172,7 @@ public class GdrAccessPolicyService {
                 admin || institutionalGdr || ownAssignments,
                 admin || evaluatedScope,
                 admin || institutionalGdr || evaluatorScope,
-                admin || institutionalGdr || ownAssignments,
+                admin || institutionalGdr || ownAssignments || cieScope,
                 admin || evaluatorScope,
                 admin || institutionalGdr || ownAssignments,
                 admin || institutionalGdr || ownAssignments,
@@ -166,14 +183,28 @@ public class GdrAccessPolicyService {
                 admin || institutionalGdr || ownAssignments,
                 admin || institutionalGdr || evaluatorScope,
                 admin || institutionalGdr || evaluatorScope,
-                admin || institutionalGdr,
+                admin || institutionalGdr || titularScope || auditorScope,
                 admin || hrLinkedOrh || hrLinkedGdrUser,
                 admin || hrLinkedOrh || hrLinkedGdrUser,
                 orhReception,
                 userManagement,
+                viewParticipacion,
+                manageParticipacion,
                 viewDistinguidoCandidates,
                 manageDistinguidoRequisites,
-                assignDistinguido
+                assignDistinguido,
+                // P0: capacidades normativas nuevas
+                admin || institutionalGdr || ownAssignments || cieScope || juntaDistinguido || titularScope || auditorScope,
+                admin || institutionalGdr,
+                admin || institutionalGdr || ownAssignments,
+                admin || institutionalGdr || evaluatorScope,
+                admin || institutionalGdr || evaluatedScope,
+                admin || institutionalGdr || evaluatedScope || cieScope,
+                admin || institutionalGdr || cieScope,
+                admin || cieScope,
+                admin || institutionalGdr || titularScope || auditorScope,
+                admin || institutionalGdr,
+                admin || institutionalGdr || auditorScope
         );
     }
 
@@ -259,6 +290,18 @@ public class GdrAccessPolicyService {
 
     public boolean canViewReports(Authentication authentication) {
         return resolveFeatureAccess(authentication).canViewReports();
+    }
+
+    public boolean canViewInformeCierre(Authentication authentication) {
+        return resolveFeatureAccess(authentication).canViewInformeCierre();
+    }
+
+    public boolean canGenerarInformeCierre(Authentication authentication) {
+        return resolveFeatureAccess(authentication).canGenerarInformeCierre();
+    }
+
+    public boolean canViewAuditoria(Authentication authentication) {
+        return resolveFeatureAccess(authentication).canViewAuditoria();
     }
 
     public boolean canViewNotifications(Authentication authentication) {
@@ -651,9 +694,38 @@ public class GdrAccessPolicyService {
         return hasAnyTechnicalRole(user, Set.of("GDR_JUNTA_DIRECTIVOS"));
     }
 
+    public boolean isCie(User user) {
+        return hasAnyTechnicalRole(user, Set.of("GDR_CIE"));
+    }
+
+    public boolean isTitular(User user) {
+        return hasAnyTechnicalRole(user, Set.of("GDR_TITULAR"));
+    }
+
+    public boolean isAuditor(User user) {
+        return hasAnyTechnicalRole(user, Set.of("GDR_AUDITOR"));
+    }
+
     public User loadUserWithContext(String username) {
         return userRepository.findByUsernameWithPerson(username)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontro el usuario autenticado."));
+    }
+
+    public boolean canViewCronograma(Authentication authentication) {
+        return resolveFeatureAccess(authentication).canViewCronograma();
+    }
+
+    public boolean canEditCronograma(Authentication authentication) {
+        return resolveFeatureAccess(authentication).canEditCronograma();
+    }
+
+    public boolean canListAdminCycles(Authentication authentication) {
+        FeatureAccessResponse features = resolveFeatureAccess(authentication);
+        return features.canManageUsers() || features.canEditCronograma();
+    }
+
+    public FeatureAccessResponse resolveFeatureAccessByAuth(Authentication authentication) {
+        return resolveFeatureAccess(authentication);
     }
 
     public boolean canOperateAssignments(User user) {
@@ -676,34 +748,17 @@ public class GdrAccessPolicyService {
         return resolveAccess(authentication)
                 .map(ResolvedAccess::featureAccess)
                 .orElseGet(() -> new FeatureAccessResponse(
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
+                        false, false, false, false, false,
+                        false, false, false, false, false,
+                        false, false, false, false, false,
+                        false, false, false, false, false,
+                        false, false, false, false, false,
+                        false, false, false, false,
+                        // T0-01: canViewParticipacion, canManageParticipacion
+                        false, false,
+                        // P0: 10 nuevas capacidades
+                        false, false, false, false, false,
+                        false, false, false, false, false,
                         false
                 ));
     }
@@ -730,6 +785,15 @@ public class GdrAccessPolicyService {
         if (isJuntaDirectivos(user)) {
             return ACTOR_JUNTA_DIRECTIVOS;
         }
+        if (isCie(user)) {
+            return ACTOR_CIE;
+        }
+        if (isTitular(user)) {
+            return ACTOR_TITULAR;
+        }
+        if (isAuditor(user)) {
+            return ACTOR_AUDITOR;
+        }
         if (isGdrConsulta(user)) {
             return ACTOR_CONSULTA;
         }
@@ -753,6 +817,47 @@ public class GdrAccessPolicyService {
         return ACTOR_SIN_ROL_FUNCIONAL;
     }
 
+    private boolean isInstitutionalFunctionalActor(String functionalActor) {
+        return ACTOR_ORH.equals(functionalActor)
+                || ACTOR_JUNTA_DIRECTIVOS.equals(functionalActor)
+                || ACTOR_CIE.equals(functionalActor)
+                || ACTOR_TITULAR.equals(functionalActor)
+                || ACTOR_AUDITOR.equals(functionalActor)
+                || ACTOR_CONSULTA.equals(functionalActor);
+    }
+
+    private UserContextAssignment ensureInstitutionalCycleContext(User user, ActiveCycle cycle) {
+        if (user.getId() == null || cycle.getId() == null) {
+            throw new IllegalStateException("No se puede provisionar contexto GDR sin identificador de usuario o ciclo.");
+        }
+        UserContextAssignment context = userContextAssignmentRepository
+                .findByUserIdAndCycleId(user.getId(), cycle.getId())
+                .orElseGet(() -> UserContextAssignment.builder()
+                        .user(user)
+                        .cycle(cycle)
+                        .build());
+        context.setContextCode(buildInstitutionalContextCode(cycle));
+        context.setContextName(buildInstitutionalContextName(cycle));
+        context.setStatus(CONTEXT_STATUS_ACTIVE);
+        return userContextAssignmentRepository.save(context);
+    }
+
+    private String buildInstitutionalContextCode(ActiveCycle cycle) {
+        String cycleCode = cycle.getCode() == null || cycle.getCode().trim().isEmpty()
+                ? String.valueOf(cycle.getId())
+                : cycle.getCode().trim();
+        String code = "CTX-GDR-" + cycleCode;
+        return code.length() <= 60 ? code : code.substring(0, 60);
+    }
+
+    private String buildInstitutionalContextName(ActiveCycle cycle) {
+        String cycleName = cycle.getName() == null || cycle.getName().trim().isEmpty()
+                ? "ciclo seleccionado"
+                : cycle.getName().trim();
+        String name = "Participacion GDR - " + cycleName;
+        return name.length() <= 180 ? name : name.substring(0, 180);
+    }
+
     private String resolveOperationalScope(User user, boolean cycleActive, boolean hrPersonLinked, String functionalActor) {
         if (isAdminSistema(user)) {
             return SCOPE_ADMIN;
@@ -768,6 +873,15 @@ public class GdrAccessPolicyService {
         }
         if (ACTOR_JUNTA_DIRECTIVOS.equals(functionalActor)) {
             return SCOPE_INSTITUTIONAL;
+        }
+        if (ACTOR_CIE.equals(functionalActor)) {
+            return SCOPE_INSTITUTIONAL;
+        }
+        if (ACTOR_TITULAR.equals(functionalActor)) {
+            return SCOPE_CONSULTA;
+        }
+        if (ACTOR_AUDITOR.equals(functionalActor)) {
+            return SCOPE_CONSULTA;
         }
         if (ACTOR_EVALUADOR_Y_EVALUADO.equals(functionalActor)) {
             return SCOPE_MIXED;
@@ -798,11 +912,13 @@ public class GdrAccessPolicyService {
                 || ACTOR_JUNTA_DIRECTIVOS.equals(functionalActor)
                 || ACTOR_EVALUADOR.equals(functionalActor)
                 || ACTOR_EVALUADO.equals(functionalActor)
-                || ACTOR_EVALUADOR_Y_EVALUADO.equals(functionalActor);
+                || ACTOR_EVALUADOR_Y_EVALUADO.equals(functionalActor)
+                || ACTOR_CIE.equals(functionalActor);
     }
 
     private boolean requiresHrIdentity(User user) {
-        return isOrh(user) || isJuntaDirectivos(user) || isGdrUsuario(user) || isGdrConsulta(user);
+        return isOrh(user) || isJuntaDirectivos(user) || isGdrUsuario(user) || isGdrConsulta(user)
+                || isCie(user) || isTitular(user) || isAuditor(user);
     }
 
     private boolean hasAnyTechnicalRole(User user, Set<String> expectedCodes) {

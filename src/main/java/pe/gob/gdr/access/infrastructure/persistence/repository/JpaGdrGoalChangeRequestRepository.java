@@ -73,4 +73,48 @@ public interface JpaGdrGoalChangeRequestRepository
             order by request.createdAt desc, request.id desc
             """)
     List<GdrGoalChangeRequest> findActiveReceptionItemsInActiveCycle();
+
+    // ── Implementaciones cycle-aware (P2) ─────────────────────────────────────
+
+    @Override
+    @Query("""
+            select request
+            from GdrGoalChangeRequest request
+            join fetch request.goal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch goal.indicator indicator
+            join fetch request.requestedByUser requestedBy
+            left join fetch request.reviewedByUser reviewedBy
+            where request.id = :id
+              and cycle.id = :cycleId
+              and upper(request.recordStatus) = 'ACTIVO'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            """)
+    Optional<GdrGoalChangeRequest> findActiveByIdAndCycle(@Param("id") Long id, @Param("cycleId") Long cycleId);
+
+    @Override
+    @Query("""
+            select request
+            from GdrGoalChangeRequest request
+            join fetch request.goal goal
+            join fetch goal.assignment assignment
+            join fetch assignment.cycle cycle
+            join fetch assignment.evaluatedPerson evaluated
+            join fetch goal.indicator indicator
+            join fetch request.requestedByUser requestedBy
+            left join fetch request.reviewedByUser reviewedBy
+            where cycle.id = :cycleId
+              and request.status in (
+                    pe.gob.gdr.access.domain.model.GoalChangeRequestStatus.PENDIENTE,
+                    pe.gob.gdr.access.domain.model.GoalChangeRequestStatus.REVISADO
+                )
+              and upper(request.recordStatus) = 'ACTIVO'
+              and upper(goal.status) = 'ACTIVE'
+              and upper(assignment.status) = 'ACTIVE'
+            order by request.createdAt desc, request.id desc
+            """)
+    List<GdrGoalChangeRequest> findActiveReceptionItemsByCycle(@Param("cycleId") Long cycleId);
 }

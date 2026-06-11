@@ -29,6 +29,10 @@ import lombok.Setter;
 @Builder
 public class GdrResult {
 
+    public static final String ESTADO_CONF_SIN_SOLICITUD = "SIN_SOLICITUD";
+    public static final String ESTADO_CONF_PENDIENTE = "PENDIENTE";
+    public static final String ESTADO_CONF_RESUELTA = "RESUELTA";
+
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sqGdrResultado")
     @SequenceGenerator(name = "sqGdrResultado", sequenceName = "SQ_GDR_RESULTADO", allocationSize = 1)
@@ -61,6 +65,11 @@ public class GdrResult {
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";
+
+    /** Trazabilidad VAL-08 — confirmación de calificación ante el CIE. */
+    @Column(name = "ESTADO_CONFIRMACION", nullable = false, length = 30)
+    @Builder.Default
+    private String estadoConfirmacion = ESTADO_CONF_SIN_SOLICITUD;
 
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -17,7 +17,8 @@ public record ActiveCycleContextResponse(
         String orgUnitName,
         String functionalActor,
         String operationalScope,
-        boolean gdrOperational
+        boolean gdrOperational,
+        String estadoEtapa
 ) {
 
     public static ActiveCycleContextResponse empty() {
@@ -38,7 +39,8 @@ public record ActiveCycleContextResponse(
                 null,
                 "SIN_ROL_FUNCIONAL_GDR",
                 "SIN_ACCESO_GDR",
-                false
+                false,
+                null
         );
     }
 }

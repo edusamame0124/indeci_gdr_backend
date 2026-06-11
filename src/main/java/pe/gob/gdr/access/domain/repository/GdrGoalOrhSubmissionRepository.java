@@ -13,5 +13,11 @@ public interface GdrGoalOrhSubmissionRepository {
 
     List<GdrGoalOrhSubmission> findActiveReceptionItemsInActiveCycle();
 
+    // ── Métodos cycle-aware (P2) ──────────────────────────────────────────────
+
+    Optional<GdrGoalOrhSubmission> findActiveByIdAndCycle(Long id, Long cycleId);
+
+    List<GdrGoalOrhSubmission> findActiveReceptionItemsByCycle(Long cycleId);
+
     GdrGoalOrhSubmission save(GdrGoalOrhSubmission submission);
 }

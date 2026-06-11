@@ -14,6 +14,10 @@ public record DistinguidoCandidatoFilaResponse(
         boolean directive82Compliance,
         boolean eligibleForDistinguidoPool,
         int rankEligible,
-        boolean alreadyDistinguido
+        boolean alreadyDistinguido,
+        String estadoConfirmacion,
+        String estadoConfirmacionLabel,
+        boolean confirmacionPendiente,
+        boolean bloqueadoPorVal08
 ) {
 }

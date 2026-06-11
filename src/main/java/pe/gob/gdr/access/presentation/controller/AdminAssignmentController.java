@@ -36,7 +36,7 @@ public class AdminAssignmentController {
     }
 
     @GetMapping
-    @PreAuthorize("@gdrAccessPolicyService.canManageUsers(authentication)")
+    @PreAuthorize("@gdrAccessPolicyService.canEditCronograma(authentication)")
     public ResponseEntity<ApiResponse<List<AssignmentListItemResponse>>> listAssignments(
             @RequestParam(name = "cycleId") Long cycleId,
             @RequestParam(name = "search", required = false) String search,
@@ -49,7 +49,7 @@ public class AdminAssignmentController {
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("@gdrAccessPolicyService.canManageUsers(authentication)")
+    @PreAuthorize("@gdrAccessPolicyService.canEditCronograma(authentication)")
     public ResponseEntity<ApiResponse<List<AssignmentSummaryByPersonResponse>>> summary(
             @RequestParam(name = "cycleId") Long cycleId
     ) {
@@ -60,7 +60,7 @@ public class AdminAssignmentController {
     }
 
     @GetMapping("/persons/searchable")
-    @PreAuthorize("@gdrAccessPolicyService.canManageUsers(authentication)")
+    @PreAuthorize("@gdrAccessPolicyService.canEditCronograma(authentication)")
     public ResponseEntity<ApiResponse<List<AssignmentPersonOptionResponse>>> searchablePersons(
             @RequestParam(name = "q", required = false) String search
     ) {
@@ -71,7 +71,7 @@ public class AdminAssignmentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("@gdrAccessPolicyService.canManageUsers(authentication)")
+    @PreAuthorize("@gdrAccessPolicyService.canEditCronograma(authentication)")
     public ResponseEntity<ApiResponse<AssignmentDetailResponse>> getAssignment(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(
                 adminAssignmentService.getById(id),
@@ -80,7 +80,7 @@ public class AdminAssignmentController {
     }
 
     @PostMapping
-    @PreAuthorize("@gdrAccessPolicyService.canManageUsers(authentication)")
+    @PreAuthorize("@gdrAccessPolicyService.canEditCronograma(authentication)")
     public ResponseEntity<ApiResponse<AssignmentDetailResponse>> createAssignment(
             @Valid @RequestBody CreateAssignmentRequest request
     ) {
@@ -92,7 +92,7 @@ public class AdminAssignmentController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("@gdrAccessPolicyService.canManageUsers(authentication)")
+    @PreAuthorize("@gdrAccessPolicyService.canEditCronograma(authentication)")
     public ResponseEntity<ApiResponse<AssignmentDetailResponse>> updateAssignment(
             @PathVariable Long id,
             @Valid @RequestBody UpdateAssignmentRequest request
@@ -104,7 +104,7 @@ public class AdminAssignmentController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("@gdrAccessPolicyService.canManageUsers(authentication)")
+    @PreAuthorize("@gdrAccessPolicyService.canEditCronograma(authentication)")
     public ResponseEntity<ApiResponse<AssignmentDetailResponse>> updateAssignmentStatus(
             @PathVariable Long id,
             @Valid @RequestBody UpdateAssignmentStatusRequest request

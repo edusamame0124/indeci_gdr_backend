@@ -1,6 +1,7 @@
 package pe.gob.gdr.access.application.dto.response;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 public record DetalleEvaluacionFinalResponse(
@@ -17,6 +18,9 @@ public record DetalleEvaluacionFinalResponse(
         String segmentName,
         String status,
         String evaluationComment,
+        LocalDate fechaReunionRetroFinal,
+        LocalDate plazoSolicitudConfirmacion,
+        Integer diasHabilesRestantesConfirmacion,
         List<DetallePuntajeResponse> details
 ) {
 }

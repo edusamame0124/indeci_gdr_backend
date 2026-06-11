@@ -91,8 +91,9 @@ app:
     entity-name: "${GDR_FORMATO_GDR_ENTITY:Instituto Nacional de Defensa Civil}"
     entity-tagline: "${GDR_FORMATO_GDR_TAGLINE:Comprando para la Seguridad y Defensa Nacional}"
     header-logo-path: "${GDR_FORMATO_GDR_HEADER_LOGO:classpath:assets/formato_gdr/logo_institucional.png}"
-    form-version: ${GDR_FORMATO_GDR_VERSION:v01}
-    form-revision: "${GDR_FORMATO_GDR_REVISION:Rev: nov-2025}"
+    form-version: ${GDR_FORMATO_GDR_VERSION:2025}
+    form-revision: "${GDR_FORMATO_GDR_REVISION:RPE 000041-2025/PE}"
+    normative-reference: "${GDR_FORMATO_GDR_NORMATIVA:RPE N.° 000041-2025/PE}"
     servir-footer-note: "${GDR_FORMATO_GDR_SERVIR_FOOTER:AUTORIDAD NACIONAL DEL SERVICIO CIVIL - SERVIR}"
     draft-banner-note: "${GDR_FORMATO_GDR_DRAFT_BANNER:BORRADOR: Datos según avance al momento. Cierre de evaluación pendiente; no sustituye acta consolidada.}"
 

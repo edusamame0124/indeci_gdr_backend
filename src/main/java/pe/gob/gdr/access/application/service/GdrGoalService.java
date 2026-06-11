@@ -51,49 +51,49 @@ public class GdrGoalService {
         this.gdrAccessPolicyService = gdrAccessPolicyService;
     }
 
-    public List<GoalSummaryResponse> listGoals(String username) {
+    public List<GoalSummaryResponse> listGoals(String username, Long cycleId) {
         User user = gdrAccessPolicyService.loadUserWithContext(username);
         List<GdrGoal> goals = gdrAccessPolicyService.isAdminSistema(user) || gdrAccessPolicyService.isOrh(user)
-                ? goalRepository.findActiveGoalsForActiveCycle()
-                : goalRepository.findActiveGoalsByPersonIdInActiveCycle(user.getPerson().getId());
+                ? goalRepository.findActiveGoalsByCycle(cycleId)
+                : goalRepository.findActiveGoalsByPersonIdAndCycle(user.getPerson().getId(), cycleId);
 
         return goals.stream()
                 .map(this::mapSummary)
                 .toList();
     }
 
-    public GoalDetailResponse getGoal(String username, Long goalId) {
+    public GoalDetailResponse getGoal(String username, Long goalId, Long cycleId) {
         User user = gdrAccessPolicyService.loadUserWithContext(username);
-        GdrGoal goal = goalRepository.findActiveByIdInActiveCycle(goalId)
+        GdrGoal goal = goalRepository.findActiveByIdAndCycle(goalId, cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontró la meta solicitada."));
         ensureCanViewGoal(user, goal);
         return mapDetail(goal);
     }
 
     @Transactional
-    public GoalDetailResponse createGoal(String username, GoalUpsertRequest request) {
+    public GoalDetailResponse createGoal(String username, Long cycleId, GoalUpsertRequest request) {
         User user = gdrAccessPolicyService.loadUserWithContext(username);
         ensureActiveCycleExists();
         GdrGoal goal = new GdrGoal();
-        applyRequest(user, goal, request, null);
+        applyRequest(user, goal, request, null, cycleId);
         return mapDetail(goalRepository.save(goal));
     }
 
     @Transactional
-    public GoalDetailResponse updateGoal(String username, Long goalId, GoalUpsertRequest request) {
+    public GoalDetailResponse updateGoal(String username, Long goalId, Long cycleId, GoalUpsertRequest request) {
         User user = gdrAccessPolicyService.loadUserWithContext(username);
         ensureActiveCycleExists();
-        GdrGoal goal = goalRepository.findActiveByIdInActiveCycle(goalId)
+        GdrGoal goal = goalRepository.findActiveByIdAndCycle(goalId, cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontró la meta solicitada."));
         ensureCanManageGoal(user, goal);
-        applyRequest(user, goal, request, goalId);
+        applyRequest(user, goal, request, goalId, cycleId);
         return mapDetail(goalRepository.save(goal));
     }
 
     @Transactional
-    public GoalDetailResponse rateGoalAchievement(String username, Long goalId, GoalCalificacionRequest request) {
+    public GoalDetailResponse rateGoalAchievement(String username, Long goalId, Long cycleId, GoalCalificacionRequest request) {
         User user = gdrAccessPolicyService.loadUserWithContext(username);
-        GdrGoal goal = goalRepository.findActiveByIdInActiveCycle(goalId)
+        GdrGoal goal = goalRepository.findActiveByIdAndCycle(goalId, cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontró la meta solicitada."));
         if (!gdrAccessPolicyService.canRateGoalAchievement(user, goal)) {
             throw new AccessDeniedException("No tiene permisos para calificar la meta solicitada.");
@@ -119,8 +119,8 @@ public class GdrGoalService {
         }
     }
 
-    private void applyRequest(User user, GdrGoal goal, GoalUpsertRequest request, Long goalId) {
-        GdrEvaluationAssignment assignment = assignmentRepository.findActiveByIdInActiveCycle(request.assignmentId())
+    private void applyRequest(User user, GdrGoal goal, GoalUpsertRequest request, Long goalId, Long cycleId) {
+        GdrEvaluationAssignment assignment = assignmentRepository.findActiveByIdAndCycle(request.assignmentId(), cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("No se encontró una asignación activa para la meta."));
         ensureCanManageAssignment(user, assignment);
 
@@ -206,7 +206,7 @@ public class GdrGoalService {
                 goal.getAssignment().getEvaluatedPerson().getDisplayName(),
                 goal.getIndicator().getId(),
                 goal.getIndicator().getName(),
-                evidenceRepository.countActiveByGoalIdInActiveCycle(goal.getId()),
+                evidenceRepository.countActiveByGoalIdAndCycle(goal.getId(), goal.getAssignment().getCycle().getId()),
                 goal.getAchievedValue(),
                 goal.getCalculatedScore()
         );

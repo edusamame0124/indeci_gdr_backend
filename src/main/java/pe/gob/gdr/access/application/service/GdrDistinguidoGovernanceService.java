@@ -6,6 +6,10 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.gob.gdr.access.application.dto.request.ActualizarRequisitosDistinguidoRequest;
@@ -28,20 +32,26 @@ public class GdrDistinguidoGovernanceService {
     private final GdrResultRepository resultRepository;
     private final GdrFinalEvaluationRepository finalEvaluationRepository;
     private final GdrResultService resultService;
+    private final GdrValidacionNormativaService validacionNormativaService;
+    private final ActaJuntaDistinguidoPdfExporter actaJuntaPdfExporter;
 
     public GdrDistinguidoGovernanceService(
             GdrResultRepository resultRepository,
             GdrFinalEvaluationRepository finalEvaluationRepository,
-            GdrResultService resultService
+            GdrResultService resultService,
+            GdrValidacionNormativaService validacionNormativaService,
+            ActaJuntaDistinguidoPdfExporter actaJuntaPdfExporter
     ) {
         this.resultRepository = resultRepository;
         this.finalEvaluationRepository = finalEvaluationRepository;
         this.resultService = resultService;
+        this.validacionNormativaService = validacionNormativaService;
+        this.actaJuntaPdfExporter = actaJuntaPdfExporter;
     }
 
     @Transactional(readOnly = true)
-    public DistinguidoCandidatosResponse listCandidatos() {
-        List<GdrResult> results = resultRepository.findAllInActiveCycle();
+    public DistinguidoCandidatosResponse listCandidatos(Long cycleId) {
+        List<GdrResult> results = resultRepository.findAllByCycleId(cycleId);
         int notifiedUniverseTotal = (int) results.stream().filter(this::isNotified).count();
         int maxSlots = DistinguishedPerformanceQuotaPolicy.maxDistinguishingSlots(notifiedUniverseTotal);
         long currentDistinguidos = results.stream().filter(this::isDistinguido).count();
@@ -68,18 +78,23 @@ public class GdrDistinguidoGovernanceService {
             rows.add(mapRow(rest, 0));
         }
 
+        int pendientes = (int) rows.stream().filter(DistinguidoCandidatoFilaResponse::confirmacionPendiente).count();
+        boolean bloqueoVal08 = pendientes > 0;
+
         return new DistinguidoCandidatosResponse(
                 notifiedUniverseTotal,
                 maxSlots,
                 (int) currentDistinguidos,
                 remaining,
+                pendientes,
+                bloqueoVal08,
                 rows
         );
     }
 
     @Transactional
-    public void actualizarRequisitos(Long assignmentId, ActualizarRequisitosDistinguidoRequest request) {
-        GdrResult result = resultRepository.findByAssignmentIdInActiveCycle(assignmentId)
+    public void actualizarRequisitos(Long assignmentId, ActualizarRequisitosDistinguidoRequest request, Long cycleId) {
+        GdrResult result = resultRepository.findByAssignmentIdAndCycle(assignmentId, cycleId)
                 .orElseThrow(() -> new ResourceNotFoundException("No existe resultado activo para la asignacion indicada."));
         result.setQualRatingNotified(flagToChar(request.qualRatingNotified()));
         result.setDirective82Compliance(flagToChar(request.directive82ComplianceConfirmed()));
@@ -87,12 +102,12 @@ public class GdrDistinguidoGovernanceService {
     }
 
     @Transactional
-    public AsignarDistinguidoResultResponse asignar(AsignarDistinguidoRequest request) {
+    public AsignarDistinguidoResultResponse asignar(AsignarDistinguidoRequest request, Long cycleId) {
         LinkedHashSet<Long> uniqueIds = new LinkedHashSet<>(request.finalEvaluationIds());
         if (uniqueIds.isEmpty()) {
             throw new DomainException("La solicitud no contiene evaluaciones finales.");
         }
-        List<GdrResult> all = resultRepository.findAllInActiveCycle();
+        List<GdrResult> all = resultRepository.findAllByCycleId(cycleId);
         int notifiedUniverseTotal = (int) all.stream().filter(this::isNotified).count();
         int maxSlots = DistinguishedPerformanceQuotaPolicy.maxDistinguishingSlots(notifiedUniverseTotal);
         long currentDistinguidos = all.stream().filter(this::isDistinguido).count();
@@ -107,11 +122,14 @@ public class GdrDistinguidoGovernanceService {
 
         int assigned = 0;
         for (Long evaluationId : uniqueIds) {
-            GdrFinalEvaluation evaluation = finalEvaluationRepository.findByIdInActiveCycle(evaluationId)
+            GdrFinalEvaluation evaluation = finalEvaluationRepository.findByIdAndCycle(evaluationId, cycleId)
                     .orElseThrow(() -> new ResourceNotFoundException(
-                            "Evaluacion final no encontrada o fuera del ciclo activo (id " + evaluationId + ")."));
-            GdrResult result = resultRepository.findByAssignmentIdInActiveCycle(evaluation.getAssignment().getId())
+                            "Evaluacion final no encontrada o fuera del ciclo indicado (id " + evaluationId + ")."));
+            GdrResult result = resultRepository.findByAssignmentIdAndCycle(evaluation.getAssignment().getId(), cycleId)
                     .orElseThrow(() -> new DomainException("El resultado ligado a la evaluacion no existe."));
+            validacionNormativaService.validarSinConfirmacionPendienteParaDistinguido(
+                    result.getAssignment().getEvaluatedPerson().getDisplayName(),
+                    result.getEstadoConfirmacion());
             if (!eligibleForJuntaUpgrade(result)) {
                 throw new DomainException(
                         "La evaluacion " + evaluationId + " no elegible para distinguido (requiere BUEN rendimiento,"
@@ -126,7 +144,7 @@ public class GdrDistinguidoGovernanceService {
             assigned++;
         }
 
-        List<GdrResult> refreshed = resultRepository.findAllInActiveCycle();
+        List<GdrResult> refreshed = resultRepository.findAllByCycleId(cycleId);
         long after = refreshed.stream().filter(this::isDistinguido).count();
         int remainingAfter = Math.max(
                 0,
@@ -137,13 +155,28 @@ public class GdrDistinguidoGovernanceService {
         return new AsignarDistinguidoResultResponse(assigned, remainingAfter);
     }
 
+    /** P6-05 — Acta de la Junta con servidores distinguidos del ciclo indicado. */
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> downloadActaJuntaPdf(Long cycleId) {
+        List<GdrResult> distinguidos = resultRepository.findAllByCycleId(cycleId).stream()
+                .filter(this::isDistinguido)
+                .toList();
+        String cicloNombre = distinguidos.isEmpty()
+                ? "Ciclo " + cycleId
+                : distinguidos.get(0).getAssignment().getCycle().getName();
+        byte[] bytes = actaJuntaPdfExporter.exportPdf(distinguidos, cicloNombre);
+        Resource resource = new ByteArrayResource(bytes);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header("Content-Disposition", "attachment; filename=\"acta_junta_distinguido.pdf\"")
+                .body(resource);
+    }
+
     private DistinguidoCandidatoFilaResponse mapRow(GdrResult result, int rankIfEligible) {
         String qr = result.getQualitativeRatingCode();
         boolean already = isDistinguido(result);
         boolean eligible = eligibleForDistinguidoPool(result);
-
-        boolean notified = isNotified(result);
-        boolean d82 = isDirective82Ok(result);
+        boolean pendiente = isConfirmacionPendiente(result);
 
         return new DistinguidoCandidatoFilaResponse(
                 result.getAssignment().getId(),
@@ -153,12 +186,30 @@ public class GdrDistinguidoGovernanceService {
                 result.getConsolidatedScore(),
                 qr,
                 QualitativeRating.labelOf(qr),
-                notified,
-                d82,
+                isNotified(result),
+                isDirective82Ok(result),
                 eligible,
                 eligible ? rankIfEligible : 0,
-                already
+                already,
+                result.getEstadoConfirmacion(),
+                estadoConfirmacionLabel(result.getEstadoConfirmacion()),
+                pendiente,
+                pendiente
         );
+    }
+
+    private String estadoConfirmacionLabel(String estado) {
+        if (GdrResult.ESTADO_CONF_PENDIENTE.equals(estado)) {
+            return "Confirmación pendiente (CIE)";
+        }
+        if (GdrResult.ESTADO_CONF_RESUELTA.equals(estado)) {
+            return "Confirmación resuelta";
+        }
+        return "Sin solicitud de confirmación";
+    }
+
+    private boolean isConfirmacionPendiente(GdrResult result) {
+        return GdrResult.ESTADO_CONF_PENDIENTE.equals(result.getEstadoConfirmacion());
     }
 
     private boolean eligibleForDistinguidoPool(GdrResult result) {

@@ -12,5 +12,11 @@ public interface GdrImprovementOpportunityRepository {
 
     Optional<GdrImprovementOpportunity> findActiveById(Long opportunityId);
 
+    // ── Métodos cycle-aware (P2) ──────────────────────────────────────────────
+
+    List<GdrImprovementOpportunity> findAllByCycleId(Long cycleId);
+
+    List<GdrImprovementOpportunity> findActiveByEvaluatedIdAndCycle(Long evaluatedId, Long cycleId);
+
     GdrImprovementOpportunity save(GdrImprovementOpportunity opportunity);
 }

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import pe.gob.gdr.access.application.dto.request.GoalCalificacionRequest;
 import pe.gob.gdr.access.application.dto.request.GoalUpsertRequest;
@@ -31,18 +32,25 @@ public class GdrGoalController {
 
     @GetMapping
     @PreAuthorize("@gdrAccessPolicyService.canViewGoals(authentication)")
-    public ResponseEntity<ApiResponse<List<GoalSummaryResponse>>> listGoals(Authentication authentication) {
+    public ResponseEntity<ApiResponse<List<GoalSummaryResponse>>> listGoals(
+            @RequestParam Long cycleId,
+            Authentication authentication
+    ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                gdrGoalService.listGoals(authentication.getName()),
+                gdrGoalService.listGoals(authentication.getName(), cycleId),
                 "Metas consultadas correctamente."
         ));
     }
 
     @GetMapping("/{goalId}")
     @PreAuthorize("@gdrAccessPolicyService.canViewGoals(authentication)")
-    public ResponseEntity<ApiResponse<GoalDetailResponse>> getGoal(@PathVariable Long goalId, Authentication authentication) {
+    public ResponseEntity<ApiResponse<GoalDetailResponse>> getGoal(
+            @PathVariable Long goalId,
+            @RequestParam Long cycleId,
+            Authentication authentication
+    ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                gdrGoalService.getGoal(authentication.getName(), goalId),
+                gdrGoalService.getGoal(authentication.getName(), goalId, cycleId),
                 "Meta consultada correctamente."
         ));
     }
@@ -50,11 +58,12 @@ public class GdrGoalController {
     @PostMapping
     @PreAuthorize("@gdrAccessPolicyService.canManageGoals(authentication)")
     public ResponseEntity<ApiResponse<GoalDetailResponse>> createGoal(
+            @RequestParam Long cycleId,
             @Valid @RequestBody GoalUpsertRequest request,
             Authentication authentication
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                gdrGoalService.createGoal(authentication.getName(), request),
+                gdrGoalService.createGoal(authentication.getName(), cycleId, request),
                 "Meta registrada correctamente."
         ));
     }
@@ -63,11 +72,12 @@ public class GdrGoalController {
     @PreAuthorize("@gdrAccessPolicyService.canManageGoals(authentication)")
     public ResponseEntity<ApiResponse<GoalDetailResponse>> updateGoal(
             @PathVariable Long goalId,
+            @RequestParam Long cycleId,
             @Valid @RequestBody GoalUpsertRequest request,
             Authentication authentication
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                gdrGoalService.updateGoal(authentication.getName(), goalId, request),
+                gdrGoalService.updateGoal(authentication.getName(), goalId, cycleId, request),
                 "Meta actualizada correctamente."
         ));
     }
@@ -76,11 +86,12 @@ public class GdrGoalController {
     @PreAuthorize("@gdrAccessPolicyService.canRateGoalAchievement(authentication, #goalId)")
     public ResponseEntity<ApiResponse<GoalDetailResponse>> rateGoalAchievement(
             @PathVariable Long goalId,
+            @RequestParam Long cycleId,
             @Valid @RequestBody GoalCalificacionRequest request,
             Authentication authentication
     ) {
         return ResponseEntity.ok(ApiResponse.ok(
-                gdrGoalService.rateGoalAchievement(authentication.getName(), goalId, request),
+                gdrGoalService.rateGoalAchievement(authentication.getName(), goalId, cycleId, request),
                 "Calificacion de meta registrada correctamente."
         ));
     }

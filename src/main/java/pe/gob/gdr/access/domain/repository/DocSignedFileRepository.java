@@ -18,5 +18,13 @@ public interface DocSignedFileRepository {
 
     Optional<DocSignedFile> findActiveByResultIdAndTypeId(Long resultId, Long typeId);
 
+    // ── Métodos cycle-aware (P2) ──────────────────────────────────────────────
+
+    List<DocSignedFile> findAllByCycleId(Long cycleId);
+
+    List<DocSignedFile> findActiveByEvaluatedIdAndCycle(Long evaluatedId, Long cycleId);
+
+    Page<DocSignedFile> findPageActiveByEvaluatedIdAndCycle(Long evaluatedId, Long cycleId, Pageable pageable);
+
     DocSignedFile save(DocSignedFile signedFile);
 }

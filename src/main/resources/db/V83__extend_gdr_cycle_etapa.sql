@@ -1,0 +1,26 @@
+WHENEVER SQLERROR EXIT FAILURE ROLLBACK
+ALTER SESSION SET CURRENT_SCHEMA = &&APP_DB_SCHEMA;
+
+-- V83: Agrega ESTADO_ETAPA y fechas de etapas al ciclo GDR
+-- Normativa: RPE 068-2020-SERVIR-PE Art. 5 (etapas del ciclo)
+-- ESTADO_ETAPA controla la máquina de estados del ciclo.
+-- Los campos de fecha permiten validar plazos normativos.
+
+ALTER TABLE GDR_CYCLE ADD (
+    ESTADO_ETAPA          VARCHAR2(50)  DEFAULT 'BORRADOR' NOT NULL,
+    FECHA_FIN_SEGUIMIENTO DATE,
+    FECHA_FIN_EVALUACION  DATE,
+    FECHA_LIMITE_INFORME  DATE
+);
+
+ALTER TABLE GDR_CYCLE ADD CONSTRAINT CK_GDR_CYCLE_ESTADO_ETAPA
+    CHECK (ESTADO_ETAPA IN (
+        'BORRADOR',
+        'EN_PLANIFICACION',
+        'EN_SEGUIMIENTO',
+        'EN_EVALUACION',
+        'EN_CONFIRMACION',
+        'EN_RENDIMIENTO_DISTINGUIDO',
+        'CERRADO',
+        'ANULADO'
+    ));

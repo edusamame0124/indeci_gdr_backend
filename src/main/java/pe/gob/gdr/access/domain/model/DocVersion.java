@@ -57,6 +57,10 @@ public class DocVersion {
     @Builder.Default
     private String status = "ACTIVO";
 
+    /** P6-03 — Referencia normativa vigente al registrar la versión documental. */
+    @Column(name = "REF_NORMATIVA", length = 120)
+    private String refNormativa;
+
     @Column(name = "FECHA_CREACION", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

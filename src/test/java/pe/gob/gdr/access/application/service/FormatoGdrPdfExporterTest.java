@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import pe.gob.gdr.access.domain.model.GdrSeguimiento;
+import pe.gob.gdr.access.domain.repository.GdrSeguimientoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,6 +28,7 @@ import pe.gob.gdr.access.domain.model.GdrValueType;
 import pe.gob.gdr.access.domain.model.HrOrgUnit;
 import pe.gob.gdr.access.domain.model.HrPerson;
 import pe.gob.gdr.access.domain.repository.GdrEvidenceRepository;
+import pe.gob.gdr.access.domain.repository.GdrFinalEvaluationRepository;
 import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 import pe.gob.gdr.access.domain.repository.GdrImprovementOpportunityRepository;
 import pe.gob.gdr.access.infrastructure.config.FormatoGdrPdfProperties;
@@ -42,17 +45,27 @@ class FormatoGdrPdfExporterTest {
     @Mock
     private GdrImprovementOpportunityRepository improvementRepository;
 
+    @Mock
+    private GdrFinalEvaluationRepository finalEvaluationRepository;
+
+    @Mock
+    private GdrSeguimientoRepository seguimientoRepository;
+
     private FormatoGdrPdfExporter exporter;
 
     @BeforeEach
     void setUp() {
         FormatoGdrPdfProperties properties = new FormatoGdrPdfProperties();
         properties.setEntityName("Entidad de prueba");
+        properties.setFormRevision("RPE 000041-2025/PE");
+        properties.setNormativeReference("RPE N.° 000041-2025/PE");
         exporter = new FormatoGdrPdfExporter(
                 properties,
                 goalRepository,
                 evidenceRepository,
-                improvementRepository
+                improvementRepository,
+                finalEvaluationRepository,
+                seguimientoRepository
         );
     }
 
@@ -67,6 +80,7 @@ class FormatoGdrPdfExporterTest {
         when(evidenceRepository.findActiveByGoalIdInActiveCycle(goal.getId())).thenReturn(List.of(e1, e2));
         when(evidenceRepository.findActiveByGoalAssignmentIdInActiveCycle(70L)).thenReturn(List.of(e1, e2));
         when(improvementRepository.findActiveByEvaluatedIdInActiveCycle(500L)).thenReturn(List.of());
+        when(seguimientoRepository.findByAssignmentIdOrderByFechaReunion(70L)).thenReturn(List.of());
 
         byte[] pdf = exporter.exportPdf(new FormatoGdrPdfExportContext(result.getAssignment(), Optional.of(result)));
 
@@ -82,8 +96,32 @@ class FormatoGdrPdfExporterTest {
         when(goalRepository.findActiveGoalsByAssignmentIdInActiveCycle(70L)).thenReturn(List.of());
         when(evidenceRepository.findActiveByGoalAssignmentIdInActiveCycle(70L)).thenReturn(List.of());
         when(improvementRepository.findActiveByEvaluatedIdInActiveCycle(500L)).thenReturn(List.of());
+        when(seguimientoRepository.findByAssignmentIdOrderByFechaReunion(70L)).thenReturn(List.of());
 
         byte[] pdf = exporter.exportPdf(new FormatoGdrPdfExportContext(assignment, Optional.empty()));
+
+        assertThat(pdf).isNotEmpty();
+        assertThat(new String(pdf, 0, Math.min(5, pdf.length))).startsWith("%PDF-");
+    }
+
+    @Test
+    void exportPdfWithCargoAndSeguimientoProducesPdf() {
+        GdrResult result = minimalResult();
+        result.getAssignment().getEvaluatedPerson().setCargo("Analista de sistemas");
+        result.getAssignment().getEvaluatedPerson().setNivelRemunerativo("P3");
+        GdrSeguimiento reunion = GdrSeguimiento.builder()
+                .id(1L)
+                .assignment(result.getAssignment())
+                .cycle(result.getAssignment().getCycle())
+                .fechaReunion(LocalDate.of(2026, 2, 15))
+                .build();
+
+        when(goalRepository.findActiveGoalsByAssignmentIdInActiveCycle(70L)).thenReturn(List.of());
+        when(evidenceRepository.findActiveByGoalAssignmentIdInActiveCycle(70L)).thenReturn(List.of());
+        when(improvementRepository.findActiveByEvaluatedIdInActiveCycle(500L)).thenReturn(List.of());
+        when(seguimientoRepository.findByAssignmentIdOrderByFechaReunion(70L)).thenReturn(List.of(reunion));
+
+        byte[] pdf = exporter.exportPdf(new FormatoGdrPdfExportContext(result.getAssignment(), Optional.of(result)));
 
         assertThat(pdf).isNotEmpty();
         assertThat(new String(pdf, 0, Math.min(5, pdf.length))).startsWith("%PDF-");
