@@ -61,8 +61,11 @@ public class GdrCicloBoardContextService {
         ActiveCycle cycle = loadCycle(cycleId);
         ChecklistData data = computeChecklist(cycleId, cycle);
 
+        boolean seguimientoMinimo = checkSeguimientoMinimo(cycle, cycleId);
+
         boolean canAdvance = "EN_PLANIFICACION".equals(cycle.getEstadoEtapa())
                 && data.cronogramaCompleto()
+                && seguimientoMinimo
                 && data.participantesRegistrados()
                 && data.asignacionesCompletas()
                 && data.indicadoresHabilitados()
@@ -80,6 +83,7 @@ public class GdrCicloBoardContextService {
                 null,   // planificacionCompletadaEn: no persiste aún
                 null,   // planificacionCompletadaPor: no persiste aún
                 data.cronogramaCompleto(),
+                seguimientoMinimo,
                 data.participantesRegistrados(),
                 data.asignacionesCompletas(),
                 data.cieAplica(),
@@ -93,7 +97,7 @@ public class GdrCicloBoardContextService {
     public PlanningChecklistResponse getPlanningChecklist(Long cycleId) {
         ActiveCycle cycle = loadCycle(cycleId);
         ChecklistData data = computeChecklist(cycleId, cycle);
-        boolean seguimientoMinimo = checkSeguimientoMinimo(cycle);
+        boolean seguimientoMinimo = checkSeguimientoMinimo(cycle, cycleId);
 
         List<String> pendientes = new ArrayList<>();
         List<String> bloqueantes = new ArrayList<>();
@@ -176,10 +180,19 @@ public class GdrCicloBoardContextService {
                 notificacionesTomaConocimiento);
     }
 
-    private boolean checkSeguimientoMinimo(ActiveCycle cycle) {
-        LocalDate inicio = cycle.getStartDate();
+    private boolean checkSeguimientoMinimo(ActiveCycle cycle, Long cycleId) {
         LocalDate finSeguimiento = cycle.getFechaFinSeguimiento();
-        if (inicio == null || finSeguimiento == null) return false;
+        if (finSeguimiento == null) return false;
+        LocalDate inicio = cycle.getStartDate();
+        if (inicio == null) {
+            // Ciclos seedeados sin START_DATE: fallback al inicio de PLANIFICACION del cronograma
+            inicio = cronogramaRepository.findByCycleIdOrderByFechaInicio(cycleId).stream()
+                    .filter(e -> "PLANIFICACION".equals(e.getEtapa()))
+                    .map(pe.gob.gdr.access.domain.model.GdrCronograma::getFechaInicio)
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (inicio == null) return false;
         return ChronoUnit.DAYS.between(inicio, finSeguimiento) >= DIAS_MINIMOS_SEGUIMIENTO;
     }
 

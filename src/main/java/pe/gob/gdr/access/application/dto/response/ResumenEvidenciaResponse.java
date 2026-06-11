@@ -19,6 +19,7 @@ public record ResumenEvidenciaResponse(
         String statusName,
         String latestReviewComment,
         String latestReviewQualificationCode,
-        String latestReviewQualificationName
+        String latestReviewQualificationName,
+        boolean mandatory
 ) {
 }

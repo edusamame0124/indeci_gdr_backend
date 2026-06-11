@@ -11,6 +11,7 @@ public record GuardarEvidenciaRequest(
         String evidenceTypeCode,
         @NotBlank(message = "El formato esperado es obligatorio.")
         String expectedFormatCode,
-        LocalDate expectedDate
+        LocalDate expectedDate,
+        Boolean mandatory
 ) {
 }

@@ -265,6 +265,7 @@ public class GdrEvidenceService {
                 "El formato esperado no es valido."
         ));
         evidence.setExpectedDate(request.expectedDate());
+        evidence.setMandatory(Boolean.TRUE.equals(request.mandatory()));
     }
 
     private void applyEvidenceFile(GdrEvidence evidence, MultipartFile file) {
@@ -329,7 +330,8 @@ public class GdrEvidenceService {
                 latestReview
                         .map(GdrEvidenceReview::getQualificationCode)
                         .map(this::resolveQualificationName)
-                        .orElse(null)
+                        .orElse(null),
+                evidence.isMandatory()
         );
     }
 
@@ -361,7 +363,8 @@ public class GdrEvidenceService {
                 evidence.getEvidenceStatus().getStatusName(),
                 openAction.map(GdrCorrectiveAction::getActionDetail).orElse(null),
                 openAction.map(GdrCorrectiveAction::getActionStatus).orElse(null),
-                reviews
+                reviews,
+                evidence.isMandatory()
         );
     }
 

@@ -67,6 +67,7 @@ class GdrCicloBoardContextServiceTest {
     @Test
     void getBoardContext_canAdvance_verdadero_cuandoTodosRequisitosOk() {
         ActiveCycle cycle = cycleEN_PLANIFICACION();
+        cycle.setFechaFinSeguimiento(java.time.LocalDate.of(2025, 8, 1)); // >180 días desde 2025-01-01 → VAL-01 ok
         stubChecklistMocks(cycle.getId(), true);
         when(activeCycleRepository.findByIdForAdministration(1L)).thenReturn(Optional.of(cycle));
 

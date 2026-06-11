@@ -73,6 +73,10 @@ public class GdrEvidence {
     @Column(name = "FILE_UPLOADED_AT")
     private LocalDateTime fileUploadedAt;
 
+    @Column(name = "IS_MANDATORY", nullable = false)
+    @Builder.Default
+    private boolean mandatory = false;
+
     @Column(name = "STATUS", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";

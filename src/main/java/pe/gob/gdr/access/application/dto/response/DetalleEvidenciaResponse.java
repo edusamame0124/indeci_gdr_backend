@@ -24,6 +24,7 @@ public record DetalleEvidenciaResponse(
         String statusName,
         String openCorrectiveActionDetail,
         String openCorrectiveActionStatus,
-        List<RevisionEvidenciaResponse> reviews
+        List<RevisionEvidenciaResponse> reviews,
+        boolean mandatory
 ) {
 }

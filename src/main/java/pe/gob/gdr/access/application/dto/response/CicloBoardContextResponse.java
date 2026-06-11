@@ -14,6 +14,7 @@ public record CicloBoardContextResponse(
         String planificacionCompletadaPor,
         // resumen del checklist (igual que PlanningChecklistResponse para compatibilidad)
         boolean cronogramaCompleto,
+        boolean seguimientoMinimoSeisMeses,
         boolean participantesRegistrados,
         boolean asignacionesCompletas,
         boolean cieAplica,

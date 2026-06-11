@@ -8,6 +8,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import pe.gob.gdr.access.application.dto.response.ActiveCycleContextResponse;
 import pe.gob.gdr.access.application.dto.response.FeatureAccessResponse;
+import pe.gob.gdr.access.application.dto.response.MeContextResponse;
 import pe.gob.gdr.access.domain.model.ActiveCycle;
 import pe.gob.gdr.access.domain.model.DocSignatureRequest;
 import pe.gob.gdr.access.domain.model.DocSignedFile;
@@ -163,14 +164,14 @@ public class GdrAccessPolicyService {
 
         return new FeatureAccessResponse(
                 true,
-                admin || institutionalGdr || ownAssignments || cieScope,
+                admin || institutionalGdr || evaluatorScope || cieScope,  // B2: EVALUADO excluido de asignaciones
+                admin || institutionalGdr || ownAssignments,              // canViewCatalogs
+                admin || institutionalGdr || ownAssignments,              // canViewIndicators
+                admin || institutionalGdr,                                // canManageIndicators: solo ORH/ADMIN (Fase 5)
+                admin || institutionalGdr || ownAssignments,              // canViewGoals
+                admin || institutionalGdr || evaluatorScope,              // canManageGoals
                 admin || institutionalGdr || ownAssignments,
-                admin || institutionalGdr || ownAssignments,
-                admin || institutionalGdr || ownAssignments,
-                admin || institutionalGdr || ownAssignments,
-                admin || institutionalGdr || evaluatorScope,
-                admin || institutionalGdr || ownAssignments,
-                admin || evaluatedScope,
+                admin || evaluatedScope || evaluatorScope,
                 admin || institutionalGdr || evaluatorScope,
                 admin || institutionalGdr || ownAssignments || cieScope,
                 admin || evaluatorScope,
@@ -614,7 +615,7 @@ public class GdrAccessPolicyService {
         return resolveAccess(authentication)
                 .filter(access -> access.featureAccess().canManageEvidences())
                 .flatMap(access -> goalRepository.findActiveByIdInActiveCycle(goalId)
-                        .map(goal -> canManageOwnEvidenceResource(access.user(), access.context(), goal)))
+                        .map(goal -> canManageOrOwnEvidenceResource(access.user(), access.context(), goal)))
                 .orElse(false);
     }
 
@@ -622,7 +623,7 @@ public class GdrAccessPolicyService {
         return resolveAccess(authentication)
                 .filter(access -> access.featureAccess().canManageEvidences())
                 .flatMap(access -> evidenceRepository.findActiveByIdInActiveCycle(evidenceId)
-                        .map(evidence -> canManageOwnEvidenceResource(access.user(), access.context(), evidence)))
+                        .map(evidence -> canManageOrOwnEvidenceResource(access.user(), access.context(), evidence)))
                 .orElse(false);
     }
 
@@ -742,6 +743,70 @@ public class GdrAccessPolicyService {
 
     public boolean canManageIndicators(User user) {
         return buildFeatureAccess(user, resolveContext(user)).canManageIndicators();
+    }
+
+    public MeContextResponse buildMeContext(Authentication authentication, Long cycleId) {
+        User user = loadUserWithContext(authentication.getName());
+        ActiveCycleContextResponse context = resolveContext(user);
+
+        List<String> rolesTecnicos = authentication.getAuthorities().stream()
+                .map(a -> a.getAuthority())
+                .filter(a -> a.startsWith("ROLE_"))
+                .toList();
+
+        Long personId = context.personId();
+        String actor;
+        List<Long> evaluadosAsignados = List.of();
+
+        if (isInstitutionalFunctionalActor(context.functionalActor())) {
+            actor = context.functionalActor();
+        } else if (personId == null) {
+            actor = ACTOR_SIN_ROL_FUNCIONAL;
+        } else {
+            List<GdrEvaluationAssignment> assignments =
+                    assignmentRepository.findActiveByPersonIdAndCycle(personId, cycleId);
+            boolean evaluator = assignments.stream()
+                    .anyMatch(a -> Objects.equals(a.getEvaluatorPerson().getId(), personId));
+            boolean evaluated = assignments.stream()
+                    .anyMatch(a -> Objects.equals(a.getEvaluatedPerson().getId(), personId));
+
+            if (evaluator && evaluated) {
+                actor = ACTOR_EVALUADOR_Y_EVALUADO;
+            } else if (evaluator) {
+                actor = ACTOR_EVALUADOR;
+            } else if (evaluated) {
+                actor = ACTOR_EVALUADO;
+            } else {
+                actor = ACTOR_SIN_ROL_FUNCIONAL;
+            }
+
+            if (evaluator) {
+                evaluadosAsignados = assignments.stream()
+                        .filter(a -> Objects.equals(a.getEvaluatorPerson().getId(), personId))
+                        .map(a -> a.getEvaluatedPerson().getId())
+                        .toList();
+            }
+        }
+
+        boolean esEvaluador = ACTOR_EVALUADOR.equals(actor) || ACTOR_EVALUADOR_Y_EVALUADO.equals(actor);
+        boolean esEvaluado = ACTOR_EVALUADO.equals(actor) || ACTOR_EVALUADOR_Y_EVALUADO.equals(actor);
+
+        List<String> contextos = new java.util.ArrayList<>();
+        if (esEvaluado) contextos.add("MI_EVALUACION");
+        if (esEvaluador) contextos.add("MIS_EVALUADOS");
+
+        return new MeContextResponse(
+                cycleId,
+                rolesTecnicos,
+                actor,
+                esEvaluado,
+                esEvaluador,
+                ACTOR_EVALUADOR_Y_EVALUADO.equals(actor),
+                personId,
+                context.personDisplayName(),
+                evaluadosAsignados,
+                contextos
+        );
     }
 
     private FeatureAccessResponse resolveFeatureAccess(Authentication authentication) {
@@ -1085,6 +1150,18 @@ public class GdrAccessPolicyService {
     private boolean canManageOwnEvidenceResource(User user, ActiveCycleContextResponse context, GdrEvidence evidence) {
         Long evaluatedId = evidence.getGoal().getAssignment().getEvaluatedPerson().getId();
         return canManageOwnEvaluatedFlow(user, context, evaluatedId);
+    }
+
+    private boolean canManageOrOwnEvidenceResource(User user, ActiveCycleContextResponse context, GdrGoal goal) {
+        Long evaluatedId = goal.getAssignment().getEvaluatedPerson().getId();
+        return canManageEvaluatedFlow(user, context, evaluatedId)
+                || canManageOwnEvaluatedFlow(user, context, evaluatedId);
+    }
+
+    private boolean canManageOrOwnEvidenceResource(User user, ActiveCycleContextResponse context, GdrEvidence evidence) {
+        Long evaluatedId = evidence.getGoal().getAssignment().getEvaluatedPerson().getId();
+        return canManageEvaluatedFlow(user, context, evaluatedId)
+                || canManageOwnEvaluatedFlow(user, context, evaluatedId);
     }
 
     private boolean canManageFinalEvaluationResource(
