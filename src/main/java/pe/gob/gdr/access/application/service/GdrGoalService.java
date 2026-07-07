@@ -24,6 +24,8 @@ import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvidenceRepository;
 import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 import pe.gob.gdr.access.domain.repository.GdrIndicatorRepository;
+import pe.gob.gdr.access.domain.repository.HrPersonRepository;
+import pe.gob.gdr.access.domain.repository.GdrSegmentRepository;
 
 @Service
 public class GdrGoalService {
@@ -34,6 +36,8 @@ public class GdrGoalService {
     private final GdrIndicatorRepository indicatorRepository;
     private final GdrEvidenceRepository evidenceRepository;
     private final GdrAccessPolicyService gdrAccessPolicyService;
+    private final HrPersonRepository hrPersonRepository;
+    private final GdrSegmentRepository segmentRepository;
 
     public GdrGoalService(
             ActiveCycleRepository activeCycleRepository,
@@ -41,7 +45,9 @@ public class GdrGoalService {
             GdrEvaluationAssignmentRepository assignmentRepository,
             GdrIndicatorRepository indicatorRepository,
             GdrEvidenceRepository evidenceRepository,
-            GdrAccessPolicyService gdrAccessPolicyService
+            GdrAccessPolicyService gdrAccessPolicyService,
+            HrPersonRepository hrPersonRepository,
+            GdrSegmentRepository segmentRepository
     ) {
         this.activeCycleRepository = activeCycleRepository;
         this.goalRepository = goalRepository;
@@ -49,6 +55,8 @@ public class GdrGoalService {
         this.indicatorRepository = indicatorRepository;
         this.evidenceRepository = evidenceRepository;
         this.gdrAccessPolicyService = gdrAccessPolicyService;
+        this.hrPersonRepository = hrPersonRepository;
+        this.segmentRepository = segmentRepository;
     }
 
     public List<GoalSummaryResponse> listGoals(String username, Long cycleId) {
@@ -120,8 +128,10 @@ public class GdrGoalService {
     }
 
     private void applyRequest(User user, GdrGoal goal, GoalUpsertRequest request, Long goalId, Long cycleId) {
-        GdrEvaluationAssignment assignment = assignmentRepository.findActiveByIdAndCycle(request.assignmentId(), cycleId)
-                .orElseThrow(() -> new ResourceNotFoundException("No se encontró una asignación activa para la meta."));
+        GdrEvaluationAssignment assignment = assignmentRepository.findActiveByEvaluatorAndEvaluatedAndCycle(
+                        user.getPerson().getId(), request.evaluatedPersonId(), cycleId)
+                .orElseGet(() -> createAssignmentForGoal(user, request.evaluatedPersonId(), cycleId));
+
         ensureCanManageAssignment(user, assignment);
 
         GdrIndicator indicator = indicatorRepository.findActiveById(request.indicatorId())
@@ -144,6 +154,29 @@ public class GdrGoalService {
         goal.setStartDate(request.startDate());
         goal.setEndDate(request.endDate());
         goal.setStatus("ACTIVE");
+    }
+
+    private GdrEvaluationAssignment createAssignmentForGoal(User user, Long evaluatedPersonId, Long cycleId) {
+        pe.gob.gdr.access.domain.model.ActiveCycle cycle = activeCycleRepository.findByIdForAdministration(cycleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ciclo no encontrado."));
+        pe.gob.gdr.access.domain.model.HrPerson evaluator = user.getPerson();
+        if (evaluator == null) {
+            throw new DomainException("El usuario no tiene una persona asociada.");
+        }
+        pe.gob.gdr.access.domain.model.HrPerson evaluated = hrPersonRepository.findActiveById(evaluatedPersonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Persona evaluada no encontrada."));
+        
+        pe.gob.gdr.access.domain.model.GdrSegment segment = segmentRepository.findActiveByCode("GENERAL")
+                .orElseThrow(() -> new DomainException("El catalogo de segmentos no contiene el segmento por defecto 'GENERAL'."));
+
+        GdrEvaluationAssignment assignment = GdrEvaluationAssignment.builder()
+                .cycle(cycle)
+                .evaluatorPerson(evaluator)
+                .evaluatedPerson(evaluated)
+                .segment(segment)
+                .status("ACTIVE")
+                .build();
+        return assignmentRepository.save(assignment);
     }
 
     private void validateGoalDates(LocalDate startDate, LocalDate endDate, GdrEvaluationAssignment assignment) {
@@ -215,7 +248,7 @@ public class GdrGoalService {
     private GoalDetailResponse mapDetail(GdrGoal goal) {
         return new GoalDetailResponse(
                 goal.getId(),
-                goal.getAssignment().getId(),
+                goal.getAssignment().getEvaluatedPerson().getId(),
                 goal.getAssignment().getCycle().getName(),
                 goal.getAssignment().getEvaluatorPerson().getDisplayName(),
                 goal.getAssignment().getEvaluatedPerson().getDisplayName(),

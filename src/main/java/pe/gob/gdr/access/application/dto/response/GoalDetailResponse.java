@@ -5,7 +5,7 @@ import java.time.LocalDate;
 
 public record GoalDetailResponse(
         Long id,
-        Long assignmentId,
+        Long evaluatedPersonId,
         String cycleName,
         String evaluatorName,
         String evaluatedName,

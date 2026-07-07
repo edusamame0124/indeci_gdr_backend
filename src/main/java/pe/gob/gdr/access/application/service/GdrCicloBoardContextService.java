@@ -67,7 +67,6 @@ public class GdrCicloBoardContextService {
                 && data.cronogramaCompleto()
                 && seguimientoMinimo
                 && data.participantesRegistrados()
-                && data.asignacionesCompletas()
                 && data.indicadoresHabilitados()
                 && data.metasFormalizadas100();
 
@@ -105,7 +104,6 @@ public class GdrCicloBoardContextService {
         if (!data.cronogramaCompleto()) bloqueantes.add("Cronograma normativo incompleto (7 etapas requeridas)");
         if (!seguimientoMinimo)         bloqueantes.add("Seguimiento < 180 días (VAL-01 / RPE 068-2020 Art. 26)");
         if (!data.participantesRegistrados()) bloqueantes.add("Sin participantes GDR registrados para este ciclo");
-        if (!data.asignacionesCompletas())    bloqueantes.add("Asignaciones evaluador-evaluado incompletas");
         if (!data.indicadoresHabilitados())   bloqueantes.add("Sin indicadores habilitados en el sistema");
         if (!data.metasFormalizadas100())     bloqueantes.add("Hay evaluados con metas cuyos pesos no suman 100%");
         if (data.cieAplica() && !data.cieConfigurado()) pendientes.add("CIE aún no conformado para este ciclo");
@@ -113,7 +111,7 @@ public class GdrCicloBoardContextService {
 
         boolean[] requiredItems = {
             data.cronogramaCompleto(), seguimientoMinimo,
-            data.participantesRegistrados(), data.asignacionesCompletas(),
+            data.participantesRegistrados(),
             data.indicadoresHabilitados(), data.metasFormalizadas100()
         };
         int fulfilled = 0;

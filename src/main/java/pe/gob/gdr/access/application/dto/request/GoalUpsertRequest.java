@@ -9,9 +9,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record GoalUpsertRequest(
-        @NotNull(message = "La asignacion es obligatoria.")
-        @Positive(message = "La asignacion debe ser valida.")
-        Long assignmentId,
+        @NotNull(message = "El evaluado es obligatorio.")
+        @Positive(message = "El evaluado debe ser valido.")
+        Long evaluatedPersonId,
         @NotNull(message = "El indicador es obligatorio.")
         @Positive(message = "El indicador debe ser valido.")
         Long indicatorId,

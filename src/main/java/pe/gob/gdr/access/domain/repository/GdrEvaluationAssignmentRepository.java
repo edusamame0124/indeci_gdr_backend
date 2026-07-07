@@ -20,6 +20,8 @@ public interface GdrEvaluationAssignmentRepository {
 
     boolean existsActivePairInCycle(Long cycleId, Long evaluatorPersonId, Long evaluatedPersonId);
 
+    Optional<GdrEvaluationAssignment> findActiveByEvaluatorAndEvaluatedAndCycle(Long evaluatorPersonId, Long evaluatedPersonId, Long cycleId);
+
     boolean existsActivePairInCycleExcludingId(
             Long cycleId,
             Long evaluatorPersonId,

@@ -139,6 +139,22 @@ public interface JpaGdrEvaluationAssignmentRepository
             @Param("excludedAssignmentId") Long excludedAssignmentId
     );
 
+
+    @Override
+    @Query("""
+            select assignment
+            from GdrEvaluationAssignment assignment
+            where assignment.cycle.id = :cycleId
+              and assignment.evaluatorPerson.id = :evaluatorId
+              and assignment.evaluatedPerson.id = :evaluatedId
+              and assignment.status = 'ACTIVE'
+            """)
+    Optional<GdrEvaluationAssignment> findActiveByEvaluatorAndEvaluatedAndCycle(
+            @Param("evaluatorId") Long evaluatorPersonId,
+            @Param("evaluatedId") Long evaluatedPersonId,
+            @Param("cycleId") Long cycleId
+    );
+
     @Override
     @Query("""
             select case when count(goal) > 0 then true else false end
