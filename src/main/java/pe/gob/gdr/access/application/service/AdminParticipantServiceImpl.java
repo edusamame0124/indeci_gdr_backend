@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import pe.gob.gdr.access.application.dto.request.CreateParticipantRoleRequest;
 import pe.gob.gdr.access.application.dto.response.ParticipantResponse;
+import pe.gob.gdr.access.domain.exception.DomainException;
 import pe.gob.gdr.access.domain.exception.ResourceNotFoundException;
 import pe.gob.gdr.access.domain.model.ActiveCycle;
 import pe.gob.gdr.access.domain.model.GdrParticipant;
@@ -21,17 +22,22 @@ import pe.gob.gdr.access.domain.repository.HrPersonRepository;
 @Transactional(readOnly = true)
 public class AdminParticipantServiceImpl implements AdminParticipantService {
 
+    private static final String ROLE_GDR_USUARIO = "GDR_USUARIO";
+
     private final GdrParticipantRepository participantRepository;
     private final ActiveCycleRepository activeCycleRepository;
     private final HrPersonRepository hrPersonRepository;
+    private final SsoUserProvisioningService ssoUserProvisioningService;
 
     public AdminParticipantServiceImpl(
             GdrParticipantRepository participantRepository,
             ActiveCycleRepository activeCycleRepository,
-            HrPersonRepository hrPersonRepository) {
+            HrPersonRepository hrPersonRepository,
+            SsoUserProvisioningService ssoUserProvisioningService) {
         this.participantRepository = participantRepository;
         this.activeCycleRepository = activeCycleRepository;
         this.hrPersonRepository = hrPersonRepository;
+        this.ssoUserProvisioningService = ssoUserProvisioningService;
     }
 
     @Override
@@ -40,11 +46,10 @@ public class AdminParticipantServiceImpl implements AdminParticipantService {
         ActiveCycle cycle = activeCycleRepository.findByIdForAdministration(request.cycleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Ciclo activo no encontrado."));
 
-        HrPerson person = hrPersonRepository.findActiveById(request.personId())
-                .orElseThrow(() -> new ResourceNotFoundException("Persona no encontrada."));
+        HrPerson person = resolvePerson(request);
 
         GdrParticipant participant = participantRepository
-                .findByCycleIdAndPersonId(request.cycleId(), request.personId())
+                .findByCycleIdAndPersonId(cycle.getId(), person.getId())
                 .orElse(null);
 
         if (participant != null) {
@@ -63,6 +68,36 @@ public class AdminParticipantServiceImpl implements AdminParticipantService {
 
         participant = participantRepository.save(participant);
         return mapToResponse(participant);
+    }
+
+    /**
+     * Resuelve la persona destino. Si viene un {@code personId} local, lo usa.
+     * Si viene del SISRH ({@code personId} nulo + DNI), aprovisiona la ficha
+     * local (HR_PERSON + SEC_USER + rol GDR_USUARIO) reutilizando la misma
+     * logica idempotente del JIT de login SSO, y luego la resuelve por DNI.
+     */
+    private HrPerson resolvePerson(CreateParticipantRoleRequest request) {
+        if (request.personId() != null) {
+            return hrPersonRepository.findActiveById(request.personId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Persona no encontrada."));
+        }
+
+        String documentNumber = request.documentNumber() == null ? null : request.documentNumber().trim();
+        if (documentNumber == null || documentNumber.isBlank()) {
+            throw new DomainException("Debe indicar la persona local (id) o el DNI del usuario de SISRH.");
+        }
+
+        ssoUserProvisioningService.ensureLocalUser(
+                request.username(),
+                List.of(ROLE_GDR_USUARIO),
+                documentNumber,
+                request.displayName(),
+                request.orgUnitCode());
+
+        return hrPersonRepository.findActiveByDocumentNumber(documentNumber)
+                .orElseThrow(() -> new DomainException(
+                        "No se pudo aprovisionar la persona desde SISRH. Verifique que tenga "
+                        + "usuario y que su oficina exista y este activa en GDR."));
     }
 
     @Override

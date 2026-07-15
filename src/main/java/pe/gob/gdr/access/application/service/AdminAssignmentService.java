@@ -1,6 +1,9 @@
 package pe.gob.gdr.access.application.service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -17,6 +20,8 @@ import pe.gob.gdr.access.application.dto.response.AssignmentPersonOptionResponse
 import pe.gob.gdr.access.application.dto.response.AssignmentPersonRefResponse;
 import pe.gob.gdr.access.application.dto.response.AssignmentSummaryByPersonResponse;
 import pe.gob.gdr.access.application.dto.response.CycleOptionResponse;
+import pe.gob.gdr.access.application.port.SisrhDirectoryPort;
+import pe.gob.gdr.access.application.port.SisrhDirectoryUser;
 import pe.gob.gdr.access.domain.exception.DomainException;
 import pe.gob.gdr.access.domain.exception.ResourceNotFoundException;
 import pe.gob.gdr.access.domain.model.ActiveCycle;
@@ -54,6 +59,7 @@ public class AdminAssignmentService {
     private final UserRepository userRepository;
     private final UserContextAssignmentRepository userContextAssignmentRepository;
     private final GdrSegmentRepository segmentRepository;
+    private final SisrhDirectoryPort sisrhDirectoryPort;
 
     public AdminAssignmentService(
             GdrEvaluationAssignmentRepository assignmentRepository,
@@ -61,7 +67,8 @@ public class AdminAssignmentService {
             HrPersonRepository hrPersonRepository,
             UserRepository userRepository,
             UserContextAssignmentRepository userContextAssignmentRepository,
-            GdrSegmentRepository segmentRepository
+            GdrSegmentRepository segmentRepository,
+            SisrhDirectoryPort sisrhDirectoryPort
     ) {
         this.assignmentRepository = assignmentRepository;
         this.activeCycleRepository = activeCycleRepository;
@@ -69,6 +76,7 @@ public class AdminAssignmentService {
         this.userRepository = userRepository;
         this.userContextAssignmentRepository = userContextAssignmentRepository;
         this.segmentRepository = segmentRepository;
+        this.sisrhDirectoryPort = sisrhDirectoryPort;
     }
 
     @Transactional(readOnly = true)
@@ -137,9 +145,33 @@ public class AdminAssignmentService {
         List<HrPerson> persons = (normalized == null)
                 ? hrPersonRepository.findAllEligibleForAssignment()
                 : hrPersonRepository.findEligibleForAssignment(normalized);
-        return persons.stream()
-                .map(this::toPersonOption)
-                .toList();
+
+        List<AssignmentPersonOptionResponse> result = new ArrayList<>();
+        Set<String> localDocuments = new HashSet<>();
+        for (HrPerson person : persons) {
+            result.add(toPersonOption(person));
+            String doc = person.getDocumentNumber();
+            if (doc != null && !doc.isBlank()) {
+                localDocuments.add(doc.trim());
+            }
+        }
+
+        // Candidatos del SISRH (usuarios GDR_USUARIO aun no aprovisionados en GDR).
+        // El directorio solo responde con termino de busqueda (q >= 2); ante error
+        // o integracion apagada devuelve vacio y la busqueda queda solo local.
+        if (normalized != null) {
+            Map<String, AssignmentPersonOptionResponse> sisrhByDoc = new LinkedHashMap<>();
+            for (SisrhDirectoryUser user : sisrhDirectoryPort.searchGdrUsers(normalized)) {
+                String doc = user.dni() == null ? null : user.dni().trim();
+                if (doc == null || doc.isBlank() || localDocuments.contains(doc)) {
+                    continue; // sin DNI util, o ya presente como candidato local
+                }
+                sisrhByDoc.putIfAbsent(doc, toSisrhOption(user));
+            }
+            result.addAll(sisrhByDoc.values());
+        }
+
+        return result;
     }
 
     @Transactional
@@ -526,7 +558,22 @@ public class AdminAssignmentService {
                 person.getDisplayName(),
                 orgUnit == null ? null : orgUnit.getId(),
                 orgUnit == null ? null : orgUnit.getCode(),
-                orgUnit == null ? null : orgUnit.getName()
+                orgUnit == null ? null : orgUnit.getName(),
+                null,
+                AssignmentPersonOptionResponse.ORIGIN_LOCAL
+        );
+    }
+
+    private AssignmentPersonOptionResponse toSisrhOption(SisrhDirectoryUser user) {
+        return new AssignmentPersonOptionResponse(
+                null,
+                user.dni(),
+                user.nombreCompleto(),
+                null,
+                user.areaCodigo(),
+                user.areaNombre(),
+                user.username(),
+                AssignmentPersonOptionResponse.ORIGIN_SISRH
         );
     }
 

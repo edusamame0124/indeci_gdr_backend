@@ -73,6 +73,18 @@ app:
   cors:
     allowed-origins: ${GDR_CORS_ALLOWED:http://localhost:4200,http://localhost:4202,http://10.64.24.19,http://10.64.24.19:8088}
 
+  # Integracion con SISRH: directorio de usuarios GDR_USUARIO (Rendimiento) para
+  # que el buscador de "Asignar Rol GDR" muestre a los registrados en SISRH aun
+  # sin haber iniciado sesion en GDR. NO requiere secretos nuevos: la
+  # autenticacion reutiliza el secreto JWT ya compartido para el SSO
+  # (app.jwt.secret). Lo unico a configurar es la URL del SISRH; en Docker es el
+  # nombre del servicio (p. ej. http://indeci-backend:8080).
+  sisrh:
+    enabled: ${GDR_SISRH_ENABLED:true}
+    base-url: ${SISRH_BASE_URL:}
+    connect-timeout-ms: ${SISRH_CONNECT_TIMEOUT_MS:5000}
+    read-timeout-ms: ${SISRH_READ_TIMEOUT_MS:15000}
+
   documentos:
     storage-base-path: ${GDR_STORAGE_PATH}
     max-file-size-bytes: ${GDR_MAX_FILE_BYTES:10485760}
