@@ -56,7 +56,7 @@ class GdrFinalEvaluationServiceTest {
                 finalEvaluationRepository, scoreDetailRepository,
                 resultService, accessPolicyService,
                 publicHolidayRepository, new GdrValidacionNormativaService(
-                        goalRepository, finalEvaluationRepository,
+                        finalEvaluationRepository,
                         assignmentRepository, casoCieRepository));
     }
 

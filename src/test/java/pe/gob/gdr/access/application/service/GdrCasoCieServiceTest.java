@@ -65,7 +65,7 @@ class GdrCasoCieServiceTest {
         sut = new GdrCasoCieService(
                 casoCieRepository, solicitudRepository, finalEvaluationRepository,
                 publicHolidayRepository, new GdrValidacionNormativaService(
-                        goalRepository, finalEvaluationRepository,
+                        finalEvaluationRepository,
                         assignmentRepositoryForValidacion, casoCieRepository),
                 resultService, new GdrConfirmacionMapper(), notificacionesService, userRepository,
                 resultConfirmacionSyncService, resultRepository, actaCiePdfExporter, documentManagementService);

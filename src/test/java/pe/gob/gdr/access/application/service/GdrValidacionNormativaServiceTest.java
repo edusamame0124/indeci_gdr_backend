@@ -9,12 +9,10 @@ import pe.gob.gdr.access.domain.model.ActiveCycle;
 import pe.gob.gdr.access.domain.repository.GdrCasoCieRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.GdrFinalEvaluationRepository;
-import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 
 class GdrValidacionNormativaServiceTest {
 
     private final GdrValidacionNormativaService sut = new GdrValidacionNormativaService(
-            Mockito.mock(GdrGoalRepository.class),
             Mockito.mock(GdrFinalEvaluationRepository.class),
             Mockito.mock(GdrEvaluationAssignmentRepository.class),
             Mockito.mock(GdrCasoCieRepository.class));

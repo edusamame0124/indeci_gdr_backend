@@ -1,5 +1,6 @@
 package pe.gob.gdr.access.application.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -7,6 +8,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.gob.gdr.access.application.dto.request.CreateCycleRequest;
+import pe.gob.gdr.access.application.dto.response.CicloAvanceChecklistResponse;
+import pe.gob.gdr.access.application.dto.response.CicloChecklistItemResponse;
 import pe.gob.gdr.access.application.dto.response.CycleAccessResponse;
 import pe.gob.gdr.access.application.dto.response.CycleOptionResponse;
 import pe.gob.gdr.access.domain.exception.DomainException;
@@ -147,6 +150,54 @@ public class GdrCicloEstadoService {
     }
 
     /**
+     * Checklist de requisitos para la SIGUIENTE transición del ciclo, en modo
+     * consulta (no lanza excepción). Reutiliza las mismas validaciones que
+     * {@link #avanzarEtapa(Long)} aplicaría, para que el frontend pueda mostrar
+     * en cualquier etapa (no solo Planificación) qué falta antes de avanzar.
+     */
+    @Transactional(readOnly = true)
+    public CicloAvanceChecklistResponse previsualizarChecklistAvance(Long cycleId) {
+        ActiveCycle cycle = loadCycle(cycleId);
+        String estadoActual = cycle.getEstadoEtapa();
+        if (!TRANSICION_SIGUIENTE.containsKey(estadoActual)) {
+            return new CicloAvanceChecklistResponse(false, List.of());
+        }
+
+        List<CicloChecklistItemResponse> items = new ArrayList<>();
+        switch (TRANSICION_SIGUIENTE.get(estadoActual)) {
+            case EN_SEGUIMIENTO -> items.add(checklistItem(
+                    "VAL-01", "Seguimiento mínimo de 6 meses",
+                    () -> validacion.validarSeguimientoMinimo6Meses(cycle)));
+            case EN_EVALUACION -> items.add(checklistItem(
+                    "VAL-03", "Fecha límite de evaluación vigente",
+                    () -> validacion.validarFechaEvaluacionLimite(cycle)));
+            case EN_CONFIRMACION -> items.add(checklistItem(
+                    "VAL-EF", "Todas las evaluaciones finales registradas",
+                    () -> validacion.validarTodasEvaluacionesFinalesRegistradas(cycleId)));
+            case EN_RENDIMIENTO_DISTINGUIDO -> items.add(checklistItem(
+                    "VAL-CIE", "Todos los casos CIE resueltos",
+                    () -> validacion.validarCasosCieTodosResueltos(cycleId)));
+            case CERRADO -> items.add(checklistItem(
+                    "VAL-13B", "Todas las evaluaciones notificadas (retroalimentación final)",
+                    () -> validacion.validarCierreConEvaluacionesSinNotificar(cycleId)));
+            default -> { /* sin requisito adicional para esta transicion */ }
+        }
+
+        boolean canAdvance = items.stream()
+                .allMatch(item -> CicloChecklistItemResponse.STATUS_PASSED.equals(item.status()));
+        return new CicloAvanceChecklistResponse(canAdvance, items);
+    }
+
+    private CicloChecklistItemResponse checklistItem(String code, String title, Runnable validation) {
+        try {
+            validation.run();
+            return new CicloChecklistItemResponse(code, title, CicloChecklistItemResponse.STATUS_PASSED, null);
+        } catch (DomainException ex) {
+            return new CicloChecklistItemResponse(code, title, CicloChecklistItemResponse.STATUS_FAILED, ex.getMessage());
+        }
+    }
+
+    /**
      * Avanza el ciclo al siguiente estado normativo.
      * Aplica validaciones normativas dependientes del estado destino.
      */
@@ -196,12 +247,9 @@ public class GdrCicloEstadoService {
 
     private void validarTransicion(ActiveCycle cycle, String estadoDestino) {
         switch (estadoDestino) {
-            case EN_SEGUIMIENTO -> {
+            case EN_SEGUIMIENTO ->
                 // VAL-01: seguimiento mínimo 6 meses configurado en cronograma
                 validacion.validarSeguimientoMinimo6Meses(cycle);
-                // VAL-07: todos los evaluados deben tener metas con pesos = 100%
-                validacion.validarPesosTotalMetasPorCiclo(cycle.getId());
-            }
             case EN_EVALUACION -> validacion.validarFechaEvaluacionLimite(cycle);
             // Todos los evaluados deben tener evaluación final antes de confirmar
             case EN_CONFIRMACION -> validacion.validarTodasEvaluacionesFinalesRegistradas(cycle.getId());

@@ -19,13 +19,11 @@ import pe.gob.gdr.access.domain.repository.ActiveCycleRepository;
 import pe.gob.gdr.access.domain.repository.GdrCasoCieRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.GdrFinalEvaluationRepository;
-import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 
 @ExtendWith(MockitoExtension.class)
 class GdrCicloEstadoServiceTest {
 
     @Mock ActiveCycleRepository activeCycleRepository;
-    @Mock GdrGoalRepository goalRepository;
     @Mock GdrFinalEvaluationRepository finalEvaluationRepository;
     @Mock GdrEvaluationAssignmentRepository assignmentRepository;
     @Mock GdrCasoCieRepository casoCieRepository;
@@ -37,7 +35,7 @@ class GdrCicloEstadoServiceTest {
     @BeforeEach
     void setUp() {
         validacion = new GdrValidacionNormativaService(
-                goalRepository, finalEvaluationRepository, assignmentRepository, casoCieRepository);
+                finalEvaluationRepository, assignmentRepository, casoCieRepository);
         sut = new GdrCicloEstadoService(activeCycleRepository, validacion, auditTrailService);
     }
 

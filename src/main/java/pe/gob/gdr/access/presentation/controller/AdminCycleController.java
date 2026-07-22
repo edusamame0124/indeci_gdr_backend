@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import pe.gob.gdr.access.application.dto.request.CreateCycleRequest;
 import pe.gob.gdr.access.application.dto.response.ApiResponse;
+import pe.gob.gdr.access.application.dto.response.CicloAvanceChecklistResponse;
 import pe.gob.gdr.access.application.dto.response.CicloBoardContextResponse;
 import pe.gob.gdr.access.application.dto.response.CicloConCronogramaResponse;
 import pe.gob.gdr.access.application.dto.response.CycleAccessResponse;
@@ -101,6 +102,20 @@ public class AdminCycleController {
         return ResponseEntity.ok(ApiResponse.ok(
                 cronogramaService.getCicloCronograma(cycleId),
                 "Etapa del ciclo avanzada correctamente."));
+    }
+
+    /**
+     * Checklist de requisitos para la SIGUIENTE transición de etapa (la que
+     * avanzar-etapa aplicaría), en modo consulta. Permite mostrar en pantalla,
+     * en cualquier etapa del ciclo, qué falta antes de avanzar.
+     */
+    @GetMapping("/{cycleId}/checklist-avance")
+    @PreAuthorize("@gdrAccessPolicyService.canEditCronograma(authentication)")
+    public ResponseEntity<ApiResponse<CicloAvanceChecklistResponse>> getChecklistAvance(
+            @PathVariable Long cycleId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                cicloEstadoService.previsualizarChecklistAvance(cycleId),
+                "Checklist de avance consultado correctamente."));
     }
 
     /**

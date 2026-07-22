@@ -12,7 +12,6 @@ import pe.gob.gdr.access.domain.model.GdrResult;
 import pe.gob.gdr.access.domain.repository.GdrCasoCieRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.GdrFinalEvaluationRepository;
-import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 
 /**
  * Validaciones normativas del ciclo GDR.
@@ -30,17 +29,14 @@ public class GdrValidacionNormativaService {
     private static final int MES_LIMITE_INFORME = 5;
     private static final int DIA_LIMITE_INFORME = 31;
 
-    private final GdrGoalRepository goalRepository;
     private final GdrFinalEvaluationRepository finalEvaluationRepository;
     private final GdrEvaluationAssignmentRepository assignmentRepository;
     private final GdrCasoCieRepository casoCieRepository;
 
     public GdrValidacionNormativaService(
-            GdrGoalRepository goalRepository,
             GdrFinalEvaluationRepository finalEvaluationRepository,
             GdrEvaluationAssignmentRepository assignmentRepository,
             GdrCasoCieRepository casoCieRepository) {
-        this.goalRepository = goalRepository;
         this.finalEvaluationRepository = finalEvaluationRepository;
         this.assignmentRepository = assignmentRepository;
         this.casoCieRepository = casoCieRepository;
@@ -179,24 +175,6 @@ public class GdrValidacionNormativaService {
     public LocalDate calcularPlazoConvocatoriaCie(LocalDate fechaRecepcion, Set<LocalDate> feriados) {
         return PeruBusinessDayCalendar.nthBusinessDayAfter(
                 fechaRecepcion, PeruBusinessDayCalendar.CIE_CONVOCATORIA_BUSINESS_DAYS, feriados);
-    }
-
-    /**
-     * VAL-07 (bloqueo) — Valida que todos los evaluados del ciclo tengan metas
-     * con pesos que sumen exactamente 100% antes de cerrar la planificación.
-     * Referencia: RPE 076-2021-SERVIR-PE.
-     */
-    public void validarPesosTotalMetasPorCiclo(Long cycleId) {
-        List<String> evaluadosConError = goalRepository.findEvaluadosConPesoIncorrectoEnCiclo(cycleId);
-        if (!evaluadosConError.isEmpty()) {
-            String lista = String.join(", ", evaluadosConError);
-            throw new DomainException(String.format(
-                    "No se puede cerrar la planificación: los siguientes evaluados tienen metas "
-                    + "cuyos pesos no suman 100%%: %s. "
-                    + "Corrija los pesos antes de avanzar a seguimiento. "
-                    + "Referencia: RPE 076-2021-SERVIR-PE.",
-                    lista));
-        }
     }
 
     /**

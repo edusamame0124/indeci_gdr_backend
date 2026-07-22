@@ -56,7 +56,7 @@ class GdrDistinguidoGovernanceServiceTest {
                 finalEvaluationRepository,
                 resultService,
                 new GdrValidacionNormativaService(
-                        goalRepository, finalEvaluationRepository,
+                        finalEvaluationRepository,
                         assignmentRepositoryForValidacion, casoCieRepositoryForValidacion),
                 actaJuntaPdfExporter);
     }

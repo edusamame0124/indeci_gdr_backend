@@ -68,7 +68,7 @@ class GdrSolicitudConfirmacionServiceTest {
                 solicitudRepository, casoCieRepository, finalEvaluationRepository,
                 activeCycleRepository, publicHolidayRepository,
                 new GdrValidacionNormativaService(
-                        goalRepository, finalEvaluationRepository,
+                        finalEvaluationRepository,
                         assignmentRepositoryForValidacion, casoCieRepository),
                 accessPolicyService,
                 new GdrConfirmacionMapper(), notificacionesService, userRepository,
