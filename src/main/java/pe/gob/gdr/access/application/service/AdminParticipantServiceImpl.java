@@ -28,16 +28,19 @@ public class AdminParticipantServiceImpl implements AdminParticipantService {
     private final ActiveCycleRepository activeCycleRepository;
     private final HrPersonRepository hrPersonRepository;
     private final SsoUserProvisioningService ssoUserProvisioningService;
+    private final GdrCycleContextProvisioningService cycleContextProvisioningService;
 
     public AdminParticipantServiceImpl(
             GdrParticipantRepository participantRepository,
             ActiveCycleRepository activeCycleRepository,
             HrPersonRepository hrPersonRepository,
-            SsoUserProvisioningService ssoUserProvisioningService) {
+            SsoUserProvisioningService ssoUserProvisioningService,
+            GdrCycleContextProvisioningService cycleContextProvisioningService) {
         this.participantRepository = participantRepository;
         this.activeCycleRepository = activeCycleRepository;
         this.hrPersonRepository = hrPersonRepository;
         this.ssoUserProvisioningService = ssoUserProvisioningService;
+        this.cycleContextProvisioningService = cycleContextProvisioningService;
     }
 
     @Override
@@ -67,6 +70,16 @@ public class AdminParticipantServiceImpl implements AdminParticipantService {
         }
 
         participant = participantRepository.save(participant);
+
+        // El rol de participacion (Evaluador/Evaluado/Mixto) habilita el acceso
+        // operativo al ciclo ANTES de que existan relaciones evaluador-evaluado
+        // (estas se autogeneran recien al registrar metas). Sin este contexto, el
+        // usuario queda con rol funcional resuelto pero sin CTX-GDR-<ciclo>
+        // asignado, y el tablero lo trata como "sin asignacion de contexto".
+        if ("ACTIVE".equalsIgnoreCase(participant.getStatus())) {
+            cycleContextProvisioningService.ensureContextForPerson(person, cycle);
+        }
+
         return mapToResponse(participant);
     }
 

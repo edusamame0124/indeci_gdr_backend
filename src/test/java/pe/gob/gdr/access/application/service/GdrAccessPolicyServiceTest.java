@@ -29,6 +29,7 @@ import pe.gob.gdr.access.domain.repository.GdrEvidenceRepository;
 import pe.gob.gdr.access.domain.repository.GdrFinalEvaluationRepository;
 import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 import pe.gob.gdr.access.domain.repository.GdrImprovementOpportunityRepository;
+import pe.gob.gdr.access.domain.repository.GdrParticipantRepository;
 import pe.gob.gdr.access.domain.repository.UserContextAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.UserRepository;
 
@@ -45,6 +46,7 @@ class GdrAccessPolicyServiceTest {
     @Mock GdrGoalRepository goalRepository;
     @Mock GdrEvidenceRepository evidenceRepository;
     @Mock GdrFinalEvaluationRepository finalEvaluationRepository;
+    @Mock GdrParticipantRepository participantRepository;
 
     private GdrAccessPolicyService sut;
 
@@ -53,7 +55,8 @@ class GdrAccessPolicyServiceTest {
         sut = new GdrAccessPolicyService(
                 userRepository, activeCycleRepository, userContextAssignmentRepository,
                 assignmentRepository, docSignedFileRepository, docSignatureRequestRepository,
-                improvementOpportunityRepository, goalRepository, evidenceRepository, finalEvaluationRepository
+                improvementOpportunityRepository, goalRepository, evidenceRepository, finalEvaluationRepository,
+                participantRepository
         );
     }
 

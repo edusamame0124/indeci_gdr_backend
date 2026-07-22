@@ -29,14 +29,10 @@ import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
 import pe.gob.gdr.access.domain.model.GdrSegment;
 import pe.gob.gdr.access.domain.model.HrOrgUnit;
 import pe.gob.gdr.access.domain.model.HrPerson;
-import pe.gob.gdr.access.domain.model.User;
-import pe.gob.gdr.access.domain.model.UserContextAssignment;
 import pe.gob.gdr.access.domain.repository.ActiveCycleRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.GdrSegmentRepository;
 import pe.gob.gdr.access.domain.repository.HrPersonRepository;
-import pe.gob.gdr.access.domain.repository.UserContextAssignmentRepository;
-import pe.gob.gdr.access.domain.repository.UserRepository;
 
 @Service
 public class AdminAssignmentService {
@@ -56,27 +52,24 @@ public class AdminAssignmentService {
     private final GdrEvaluationAssignmentRepository assignmentRepository;
     private final ActiveCycleRepository activeCycleRepository;
     private final HrPersonRepository hrPersonRepository;
-    private final UserRepository userRepository;
-    private final UserContextAssignmentRepository userContextAssignmentRepository;
     private final GdrSegmentRepository segmentRepository;
     private final SisrhDirectoryPort sisrhDirectoryPort;
+    private final GdrCycleContextProvisioningService cycleContextProvisioningService;
 
     public AdminAssignmentService(
             GdrEvaluationAssignmentRepository assignmentRepository,
             ActiveCycleRepository activeCycleRepository,
             HrPersonRepository hrPersonRepository,
-            UserRepository userRepository,
-            UserContextAssignmentRepository userContextAssignmentRepository,
             GdrSegmentRepository segmentRepository,
-            SisrhDirectoryPort sisrhDirectoryPort
+            SisrhDirectoryPort sisrhDirectoryPort,
+            GdrCycleContextProvisioningService cycleContextProvisioningService
     ) {
         this.assignmentRepository = assignmentRepository;
         this.activeCycleRepository = activeCycleRepository;
         this.hrPersonRepository = hrPersonRepository;
-        this.userRepository = userRepository;
-        this.userContextAssignmentRepository = userContextAssignmentRepository;
         this.segmentRepository = segmentRepository;
         this.sisrhDirectoryPort = sisrhDirectoryPort;
+        this.cycleContextProvisioningService = cycleContextProvisioningService;
     }
 
     @Transactional(readOnly = true)
@@ -289,44 +282,8 @@ public class AdminAssignmentService {
         if (assignment == null || assignment.getCycle() == null) {
             return;
         }
-        ensureCycleContextForPerson(assignment.getEvaluatorPerson(), assignment.getCycle());
-        ensureCycleContextForPerson(assignment.getEvaluatedPerson(), assignment.getCycle());
-    }
-
-    private void ensureCycleContextForPerson(HrPerson person, ActiveCycle cycle) {
-        if (person == null || cycle == null || person.getId() == null || cycle.getId() == null) {
-            return;
-        }
-
-        List<User> users = userRepository.findActiveGdrUsersByPersonId(person.getId());
-        for (User user : users) {
-            UserContextAssignment context = userContextAssignmentRepository
-                    .findByUserIdAndCycleId(user.getId(), cycle.getId())
-                    .orElseGet(() -> UserContextAssignment.builder()
-                            .user(user)
-                            .cycle(cycle)
-                            .build());
-            context.setContextCode(buildContextCode(cycle));
-            context.setContextName(buildContextName(cycle));
-            context.setStatus(ACTIVE);
-            userContextAssignmentRepository.save(context);
-        }
-    }
-
-    private String buildContextCode(ActiveCycle cycle) {
-        String cycleCode = cycle.getCode() == null || cycle.getCode().trim().isEmpty()
-                ? String.valueOf(cycle.getId())
-                : cycle.getCode().trim();
-        String code = "CTX-GDR-" + cycleCode;
-        return code.length() <= 60 ? code : code.substring(0, 60);
-    }
-
-    private String buildContextName(ActiveCycle cycle) {
-        String cycleName = cycle.getName() == null || cycle.getName().trim().isEmpty()
-                ? "ciclo seleccionado"
-                : cycle.getName().trim();
-        String name = "Participacion GDR - " + cycleName;
-        return name.length() <= 180 ? name : name.substring(0, 180);
+        cycleContextProvisioningService.ensureContextForPerson(assignment.getEvaluatorPerson(), assignment.getCycle());
+        cycleContextProvisioningService.ensureContextForPerson(assignment.getEvaluatedPerson(), assignment.getCycle());
     }
 
     private GdrEvaluationAssignment loadForAdministration(Long id) {

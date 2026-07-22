@@ -25,6 +25,7 @@ import pe.gob.gdr.access.domain.exception.DomainException;
 import pe.gob.gdr.access.domain.exception.ResourceNotFoundException;
 import pe.gob.gdr.access.domain.model.ActiveCycle;
 import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
+import pe.gob.gdr.access.domain.model.GdrParticipant;
 import pe.gob.gdr.access.domain.model.HrOrgUnit;
 import pe.gob.gdr.access.domain.model.HrPerson;
 import pe.gob.gdr.access.domain.model.Role;
@@ -32,6 +33,7 @@ import pe.gob.gdr.access.domain.model.User;
 import pe.gob.gdr.access.domain.model.UserRole;
 import pe.gob.gdr.access.domain.repository.ActiveCycleRepository;
 import pe.gob.gdr.access.domain.repository.GdrEvaluationAssignmentRepository;
+import pe.gob.gdr.access.domain.repository.GdrParticipantRepository;
 import pe.gob.gdr.access.domain.repository.HrOrgUnitRepository;
 import pe.gob.gdr.access.domain.repository.HrPersonRepository;
 import pe.gob.gdr.access.domain.repository.RoleRepository;
@@ -62,6 +64,7 @@ public class AdminUserService {
     private final ActiveCycleRepository activeCycleRepository;
     private final GdrEvaluationAssignmentRepository assignmentRepository;
     private final UserContextAssignmentRepository userContextAssignmentRepository;
+    private final GdrParticipantRepository participantRepository;
     private final PasswordEncoder passwordEncoder;
 
     public AdminUserService(
@@ -72,6 +75,7 @@ public class AdminUserService {
             ActiveCycleRepository activeCycleRepository,
             GdrEvaluationAssignmentRepository assignmentRepository,
             UserContextAssignmentRepository userContextAssignmentRepository,
+            GdrParticipantRepository participantRepository,
             PasswordEncoder passwordEncoder
     ) {
         this.userRepository = userRepository;
@@ -81,6 +85,7 @@ public class AdminUserService {
         this.activeCycleRepository = activeCycleRepository;
         this.assignmentRepository = assignmentRepository;
         this.userContextAssignmentRepository = userContextAssignmentRepository;
+        this.participantRepository = participantRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -398,6 +403,24 @@ public class AdminUserService {
                 .filter(assignment -> assignment.getEvaluatedPerson() != null)
                 .filter(assignment -> Objects.equals(assignment.getEvaluatedPerson().getId(), person.getId()))
                 .count();
+
+        // Union con GDR_PARTICIPANT: ORH asigna el rol del ciclo (Evaluador/Evaluado/
+        // Mixto) en "Participacion GDR por ciclo" ANTES de que existan relaciones
+        // evaluador-evaluado (autogeneradas recien al registrar metas). Mismo fix
+        // aplicado en GdrAccessPolicyService.resolveFunctionalActor.
+        Optional<GdrParticipant> participant = participantRepository
+                .findByCycleIdAndPersonId(activeCycle.get().getId(), person.getId())
+                .filter(p -> ACTIVE.equalsIgnoreCase(p.getStatus()));
+        if (participant.isPresent()) {
+            String participantRole = participant.get().getRole();
+            if ("EVALUADOR".equals(participantRole) || "MIXTO".equals(participantRole)) {
+                asEvaluator++;
+            }
+            if ("EVALUADO".equals(participantRole) || "MIXTO".equals(participantRole)) {
+                asEvaluated++;
+            }
+        }
+
         String functionalActor = resolveFunctionalActor(asEvaluator, asEvaluated);
         boolean contextAssigned = userContextAssignmentRepository
                 .findActiveByUsernameAndCycleId(user.getUsername(), activeCycle.get().getId())

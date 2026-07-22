@@ -16,6 +16,7 @@ import pe.gob.gdr.access.domain.model.GdrEvaluationAssignment;
 import pe.gob.gdr.access.domain.model.GdrEvidence;
 import pe.gob.gdr.access.domain.model.GdrGoal;
 import pe.gob.gdr.access.domain.model.GdrImprovementOpportunity;
+import pe.gob.gdr.access.domain.model.GdrParticipant;
 import pe.gob.gdr.access.domain.model.HrPerson;
 import pe.gob.gdr.access.domain.model.User;
 import pe.gob.gdr.access.domain.model.UserContextAssignment;
@@ -27,6 +28,7 @@ import pe.gob.gdr.access.domain.repository.GdrEvidenceRepository;
 import pe.gob.gdr.access.domain.repository.GdrFinalEvaluationRepository;
 import pe.gob.gdr.access.domain.repository.GdrGoalRepository;
 import pe.gob.gdr.access.domain.repository.GdrImprovementOpportunityRepository;
+import pe.gob.gdr.access.domain.repository.GdrParticipantRepository;
 import pe.gob.gdr.access.domain.repository.UserContextAssignmentRepository;
 import pe.gob.gdr.access.domain.repository.UserRepository;
 
@@ -64,6 +66,7 @@ public class GdrAccessPolicyService {
     private final GdrGoalRepository goalRepository;
     private final GdrEvidenceRepository evidenceRepository;
     private final GdrFinalEvaluationRepository finalEvaluationRepository;
+    private final GdrParticipantRepository participantRepository;
 
     public GdrAccessPolicyService(
             UserRepository userRepository,
@@ -75,7 +78,8 @@ public class GdrAccessPolicyService {
             GdrImprovementOpportunityRepository improvementOpportunityRepository,
             GdrGoalRepository goalRepository,
             GdrEvidenceRepository evidenceRepository,
-            GdrFinalEvaluationRepository finalEvaluationRepository
+            GdrFinalEvaluationRepository finalEvaluationRepository,
+            GdrParticipantRepository participantRepository
     ) {
         this.userRepository = userRepository;
         this.activeCycleRepository = activeCycleRepository;
@@ -87,6 +91,7 @@ public class GdrAccessPolicyService {
         this.goalRepository = goalRepository;
         this.evidenceRepository = evidenceRepository;
         this.finalEvaluationRepository = finalEvaluationRepository;
+        this.participantRepository = participantRepository;
     }
 
     public ActiveCycleContextResponse resolveContext(User user) {
@@ -167,7 +172,7 @@ public class GdrAccessPolicyService {
                 admin || institutionalGdr || evaluatorScope || cieScope,  // B2: EVALUADO excluido de asignaciones
                 admin || institutionalGdr || ownAssignments,              // canViewCatalogs
                 admin || institutionalGdr || ownAssignments,              // canViewIndicators
-                admin || institutionalGdr,                                // canManageIndicators: solo ORH/ADMIN (Fase 5)
+                admin || institutionalGdr || evaluatorScope,               // canManageIndicators: ORH/ADMIN + Evaluador/Mixto
                 admin || institutionalGdr || ownAssignments,              // canViewGoals
                 admin || institutionalGdr || evaluatorScope,              // canManageGoals
                 admin || institutionalGdr || ownAssignments,
@@ -770,6 +775,17 @@ public class GdrAccessPolicyService {
             boolean evaluated = assignments.stream()
                     .anyMatch(a -> Objects.equals(a.getEvaluatedPerson().getId(), personId));
 
+            // Union con GDR_PARTICIPANT (ver resolveFunctionalActor: ORH asigna el
+            // rol del ciclo antes de que existan relaciones evaluador-evaluado).
+            Optional<GdrParticipant> participant = participantRepository
+                    .findByCycleIdAndPersonId(cycleId, personId)
+                    .filter(p -> CONTEXT_STATUS_ACTIVE.equalsIgnoreCase(p.getStatus()));
+            if (participant.isPresent()) {
+                String participantRole = participant.get().getRole();
+                evaluator = evaluator || ACTOR_EVALUADOR.equals(participantRole) || "MIXTO".equals(participantRole);
+                evaluated = evaluated || ACTOR_EVALUADO.equals(participantRole) || "MIXTO".equals(participantRole);
+            }
+
             if (evaluator && evaluated) {
                 actor = ACTOR_EVALUADOR_Y_EVALUADO;
             } else if (evaluator) {
@@ -869,6 +885,20 @@ public class GdrAccessPolicyService {
         List<GdrEvaluationAssignment> assignments = assignmentRepository.findActiveByPersonIdInActiveCycle(person.getId());
         boolean evaluator = assignments.stream().anyMatch(item -> Objects.equals(item.getEvaluatorPerson().getId(), person.getId()));
         boolean evaluated = assignments.stream().anyMatch(item -> Objects.equals(item.getEvaluatedPerson().getId(), person.getId()));
+
+        // Union con GDR_PARTICIPANT: ORH asigna el rol del ciclo (Evaluador/Evaluado/
+        // Mixto) en "Participacion GDR por ciclo" ANTES de que existan relaciones
+        // evaluador-evaluado (estas se autogeneran recien al registrar metas). Sin
+        // esta union, un evaluador recien asignado queda SIN_ROL_FUNCIONAL y no
+        // puede acceder al tablero para registrar la meta que generaria la relacion.
+        Optional<GdrParticipant> participant = participantRepository
+                .findByCycleIdAndPersonId(activeCycle.getId(), person.getId())
+                .filter(p -> CONTEXT_STATUS_ACTIVE.equalsIgnoreCase(p.getStatus()));
+        if (participant.isPresent()) {
+            String participantRole = participant.get().getRole();
+            evaluator = evaluator || ACTOR_EVALUADOR.equals(participantRole) || "MIXTO".equals(participantRole);
+            evaluated = evaluated || ACTOR_EVALUADO.equals(participantRole) || "MIXTO".equals(participantRole);
+        }
 
         if (evaluator && evaluated) {
             return ACTOR_EVALUADOR_Y_EVALUADO;
